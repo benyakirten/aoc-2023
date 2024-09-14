@@ -18,12 +18,18 @@ pub fn main() !void {
     const inputs = try cwd.openFile("puzzle_input.txt", .{ .mode = .read_only });
     defer inputs.close();
 
-    const buf = try allocator.alloc(u8, 1);
+    const sum = try sumNumbers(inputs, allocator);
+    std.debug.print("Total: {}\n", .{sum});
+}
 
-    var sum: u16 = 0;
+fn sumNumbers(file: std.fs.File, allocator: std.mem.Allocator) !u32 {
+    const buf = try allocator.alloc(u8, 1);
+    defer allocator.free(buf);
+
+    var sum: u32 = 0;
     var first: u16 = 0;
     var last: u16 = 0;
-    var letters_read = try inputs.read(buf);
+    var letters_read = try file.read(buf);
 
     while (true) {
         var letter = buf[0];
@@ -39,11 +45,9 @@ pub fn main() !void {
         }
 
         if ((letter >= 'a' and letter <= 'z')) {
-            const starting_position = try inputs.getPos();
-            if (try readPossibleWord(letter, inputs, allocator)) |val| {
+            if (try readPossibleWord(letter, file, allocator)) |val| {
                 letter = val + '0';
             }
-            try inputs.seekTo(starting_position);
         }
 
         if (letter >= '0' and letter <= '9') {
@@ -54,10 +58,10 @@ pub fn main() !void {
             last = letter - '0';
         }
 
-        letters_read = try inputs.read(buf);
+        letters_read = try file.read(buf);
     }
 
-    std.debug.print("Total: {}\n", .{sum});
+    return sum;
 }
 
 const TWords = [2]WordValue{
@@ -76,6 +80,9 @@ const SWords = [2]WordValue{
 };
 
 fn readPossibleWord(first_letter: u8, file: std.fs.File, allocator: std.mem.Allocator) !?u8 {
+    const starting_position = try file.getPos();
+    defer file.seekTo(starting_position) catch {};
+
     switch (first_letter) {
         'o' => return convertPossibleWordToInt(file, "one"[0..], 1, allocator),
         't' => return findPossibleWordValueAmongMany(file, TWords, allocator),
@@ -103,6 +110,8 @@ fn findPossibleWordValueAmongMany(file: std.fs.File, word_values: [2]WordValue, 
 
 fn convertPossibleWordToInt(file: std.fs.File, word: []const u8, value: u8, allocator: std.mem.Allocator) !?u8 {
     const buf = try allocator.alloc(u8, 1);
+    defer allocator.free(buf);
+
     for (word[1..]) |letter| {
         const letters_read = try file.read(buf);
         if (letters_read == 0) {
@@ -113,6 +122,87 @@ fn convertPossibleWordToInt(file: std.fs.File, word: []const u8, value: u8, allo
             return null;
         }
     }
-
     return value;
+}
+
+test "sumNumbers" {
+    const file = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer file.close();
+
+    const got = try sumNumbers(file, std.testing.allocator);
+    try std.testing.expectEqual(281, got);
+    try std.testing.expectEqual(try file.getPos(), try file.getEndPos());
+}
+
+test "readPossibleWord success" {
+    const file = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer file.close();
+
+    try file.seekTo(10);
+
+    const got = readPossibleWord('e', file, std.testing.allocator);
+    try std.testing.expectEqual(8, got);
+    try std.testing.expectEqual(10, try file.getPos());
+}
+
+test "readPossibleWord failure" {
+    const file = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer file.close();
+
+    try file.seekTo(9);
+
+    const got = readPossibleWord('e', file, std.testing.allocator);
+    try std.testing.expectEqual(null, got);
+    try std.testing.expectEqual(9, try file.getPos());
+}
+
+test "findPossibleWordValueAmongMany success on first attempt" {
+    const file = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer file.close();
+
+    try file.seekTo(14);
+
+    const got = try findPossibleWordValueAmongMany(file, TWords, std.testing.allocator);
+    try std.testing.expectEqual(2, got);
+    try std.testing.expectEqual(16, try file.getPos());
+}
+
+test "findPossibleWordValueAmongMany success on second attempt" {
+    const file = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer file.close();
+
+    try file.seekTo(17);
+
+    const got = try findPossibleWordValueAmongMany(file, TWords, std.testing.allocator);
+    try std.testing.expectEqual(3, got);
+    try std.testing.expectEqual(21, try file.getPos());
+}
+
+test "findPossibleWordValueAmongMany failure" {
+    const file = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer file.close();
+
+    const got = try findPossibleWordValueAmongMany(file, TWords, std.testing.allocator);
+    try std.testing.expectEqual(null, got);
+    try std.testing.expectEqual(0, try file.getPos());
+}
+
+test "convertPossibleWordToInt success" {
+    const file = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer file.close();
+
+    try file.seekTo(1);
+
+    const got = try convertPossibleWordToInt(file, "two", 2, std.testing.allocator);
+    try std.testing.expectEqual(2, got);
+    try std.testing.expectEqual(3, try file.getPos());
+}
+
+test "convertPossibleWordtoInt failure" {
+    const file = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer file.close();
+
+    const got = try convertPossibleWordToInt(file, "two", 2, std.testing.allocator);
+    try std.testing.expectEqual(null, got);
+    try std.testing.expectEqual(1, try file.getPos());
 }
