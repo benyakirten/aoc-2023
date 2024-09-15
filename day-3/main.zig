@@ -5,16 +5,41 @@ const root = @import("root.zig");
 const Island = root.Island;
 const Coord = root.Coord;
 
+const IslandsAndCoords = struct {
+    islands: []Island,
+    coords: [][]Coord,
+    allocator: std.mem.Allocator,
+
+    fn deinit(self: IslandsAndCoords) void {
+        self.allocator.free(self.islands);
+        for (self.coords) |coords| {
+            self.allocator.free(coords);
+        }
+        self.allocator.free(self.coords);
+    }
+};
+
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
 
     const allocator = arena.allocator();
 
+    const inputs = try std.fs.cwd().openFile("puzzle_inputs.txt", .{ .mode = .read_only });
+
+    const islandsAndCoords = try getIslandsAndCoords(inputs, allocator);
+    defer islandsAndCoords.deinit();
+
+    const islands = islandsAndCoords.islands;
+    const coords = islandsAndCoords.coords;
+
+    const island_values = getAllIslandValues(islands, coords);
+    std.debug.print("Island values: {}\n", .{island_values});
+}
+
+fn getIslandsAndCoords(file: std.fs.File, allocator: std.mem.Allocator) !IslandsAndCoords {
     const buf = try allocator.alloc(u8, 1);
     defer allocator.free(buf);
-
-    const inputs = try std.fs.cwd().openFile("puzzle_inputs.txt", .{ .mode = .read_only });
 
     var islands_list = std.ArrayList(Island).init(allocator);
     defer islands_list.deinit();
@@ -31,7 +56,7 @@ pub fn main() !void {
     var x: u16 = 0;
     var y: u16 = 0;
 
-    while (try inputs.read(buf) != 0) {
+    while (try file.read(buf) != 0) {
         const letter = buf[0];
 
         if (letter == '\n') {
@@ -59,7 +84,7 @@ pub fn main() !void {
             }
 
             if (letter != '.') {
-                const coord = Coord{ .x = x, .y = y };
+                const coord = Coord{ .x = x, .y = y, .val = letter };
                 try line_coords.append(coord);
             }
         }
@@ -70,31 +95,26 @@ pub fn main() !void {
     const islands = try islands_list.toOwnedSlice();
     const coords = try coords_list.toOwnedSlice();
 
+    return IslandsAndCoords{ .islands = islands, .coords = coords, .allocator = allocator };
+}
+
+test "main has no memory leaks" {
+    try main();
+}
+
+test "getIslandsAndCoords has no memory leaks" {
+    const inputs = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    const islandsAndCoords = try getIslandsAndCoords(inputs, std.testing.allocator);
+    islandsAndCoords.deinit();
+}
+
+fn getAllIslandValues(islands: []Island, coords: [][]Coord) u32 {
     var sum: u32 = 0;
 
     for (islands) |island| {
-        const val = getIslandValue(coords, island);
-        std.debug.print("Adding {} to {}\n\n", .{ val, sum });
+        const val = island.getValue(coords);
         sum += val;
     }
 
-    std.debug.print("Total: {}\n", .{sum});
-}
-
-fn getIslandValue(coords: [][]Coord, island: Island) u16 {
-    const y_range = island.getYRange(coords.len);
-    std.debug.print("Examining range from {} to {} for {}\n", .{ y_range.min, y_range.max, island.value });
-
-    for (y_range.min..y_range.max) |i| {
-        std.debug.print("line {}\n", .{i});
-        const potential_coords = coords[i];
-
-        for (potential_coords) |coord| {
-            if (island.isAdjacentTo(coord)) {
-                return island.value;
-            }
-        }
-    }
-
-    return 0;
+    return sum;
 }
