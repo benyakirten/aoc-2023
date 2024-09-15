@@ -35,6 +35,22 @@ pub fn main() !void {
 
     const island_values = getAllIslandValues(islands, coords);
     std.debug.print("Island values: {}\n", .{island_values});
+
+    const gear_ratio_total = getGearRatioTotal(islands, coords);
+    std.debug.print("Gear ratio total: {}\n", .{gear_ratio_total});
+}
+
+// TODO: Make islands indexable by line ratio so we can avoid iterating over all islands
+fn getGearRatioTotal(islands: []Island, coords: [][]Coord) usize {
+    var gear_ratio: usize = 0;
+
+    for (coords) |coord_line| {
+        for (coord_line) |coord| {
+            gear_ratio += coord.getGearRatio(islands);
+        }
+    }
+
+    return gear_ratio;
 }
 
 fn getIslandsAndCoords(file: std.fs.File, allocator: std.mem.Allocator) !IslandsAndCoords {

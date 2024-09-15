@@ -1,15 +1,116 @@
 const std = @import("std");
 
-pub const Coord = struct {
-    x: u32,
-    y: u32,
-    val: u8,
-};
+/// Gears are only to be counted if they have a value of +
+const GEAR_VALUE: u8 = '*';
 
 pub const YRange = struct {
     min: usize,
     max: usize,
 };
+
+pub const Coord = struct {
+    x: u16,
+    y: u16,
+    val: u8,
+
+    pub fn getGearRatio(self: Coord, islands: []Island) u32 {
+        if (self.val != GEAR_VALUE) {
+            return 0;
+        }
+
+        var value_1: u16 = 0;
+        var value_2: u16 = 0;
+
+        for (islands) |island| {
+            if (island.isAdjacentTo(self)) {
+                if (value_1 == 0) {
+                    value_1 = island.value;
+                } else if (value_2 == 0) {
+                    value_2 = island.value;
+                } else {
+                    return 0;
+                }
+            }
+        }
+
+        const total: u32 = @as(u32, value_1) * @as(u32, value_2);
+        return total;
+    }
+};
+
+test "Coord.getGearRatio with no adjacent islands" {
+    const coord = Coord{ .x = 2, .y = 2, .val = GEAR_VALUE };
+
+    var islands_list = std.ArrayList(Island).init(std.testing.allocator);
+    defer islands_list.deinit();
+
+    const islands = try islands_list.toOwnedSlice();
+    defer std.testing.allocator.free(islands);
+
+    const ratio = coord.getGearRatio(islands);
+    try std.testing.expectEqual(0, ratio);
+}
+
+test "Coord.getGearRatio with one adjacent island" {
+    const coord = Coord{ .x = 2, .y = 2, .val = GEAR_VALUE };
+
+    var islands_list = std.ArrayList(Island).init(std.testing.allocator);
+    defer islands_list.deinit();
+
+    try islands_list.append(Island{ .min_x = 1, .max_x = 3, .value = 10, .y = 2 });
+
+    const islands = try islands_list.toOwnedSlice();
+    defer std.testing.allocator.free(islands);
+
+    const ratio = coord.getGearRatio(islands);
+    try std.testing.expectEqual(@as(u32, 0), ratio);
+}
+
+test "Coord.getGearRatio with two adjacent islands" {
+    const coord = Coord{ .x = 2, .y = 2, .val = GEAR_VALUE };
+
+    var islands_list = std.ArrayList(Island).init(std.testing.allocator);
+    defer islands_list.deinit();
+
+    try islands_list.append(Island{ .min_x = 1, .max_x = 3, .value = 10, .y = 3 });
+    try islands_list.append(Island{ .min_x = 3, .max_x = 4, .value = 20, .y = 2 });
+
+    const islands = try islands_list.toOwnedSlice();
+    defer std.testing.allocator.free(islands);
+
+    const ratio = coord.getGearRatio(islands);
+    try std.testing.expectEqual(@as(u32, 200), ratio);
+}
+
+test "Coord.getGearRatio with more than two adjacent islands" {
+    const coord = Coord{ .x = 2, .y = 2, .val = GEAR_VALUE };
+
+    var islands_list = std.ArrayList(Island).init(std.testing.allocator);
+    defer islands_list.deinit();
+
+    try islands_list.append(Island{ .min_x = 1, .max_x = 3, .value = 30, .y = 1 });
+    try islands_list.append(Island{ .min_x = 1, .max_x = 3, .value = 10, .y = 3 });
+    try islands_list.append(Island{ .min_x = 3, .max_x = 4, .value = 20, .y = 2 });
+
+    const islands = try islands_list.toOwnedSlice();
+    defer std.testing.allocator.free(islands);
+
+    const ratio = coord.getGearRatio(islands);
+    try std.testing.expectEqual(@as(u32, 0), ratio);
+}
+
+test "Coord.getGearRatio with non-gear value" {
+    const coord = Coord{ .x = 2, .y = 2, .val = ' ' };
+
+    var islands_list = std.ArrayList(Island).init(std.testing.allocator);
+    defer islands_list.deinit();
+
+    const islands = try islands_list.toOwnedSlice();
+    defer std.testing.allocator.free(islands);
+
+    const ratio = coord.getGearRatio(islands);
+    try std.testing.expectEqual(@as(u32, 0), ratio);
+}
 
 pub const Island = struct {
     value: u16,
@@ -48,16 +149,8 @@ pub const Island = struct {
         };
     }
 
-    pub fn getYRange(self: Island, max_y: usize) YRange {
-        const island_y = self.y;
-        const min_coord_y: usize = if (island_y > 0) island_y - 1 else 0;
-        const max_coord_y: usize = if (island_y < max_y - 1) island_y + 2 else max_y;
-
-        return YRange{ .min = min_coord_y, .max = max_coord_y };
-    }
-
     pub fn getValue(self: Island, coords: [][]Coord) u16 {
-        const y_range = self.getYRange(coords.len);
+        const y_range = getYRange(self.y, coords.len);
 
         for (y_range.min..y_range.max) |i| {
             const potential_coords = coords[i];
@@ -72,6 +165,13 @@ pub const Island = struct {
         return 0;
     }
 };
+
+pub fn getYRange(y: u16, max_y: usize) YRange {
+    const min_coord_y: usize = if (y > 0) y - 1 else 0;
+    const max_coord_y: usize = if (y < max_y - 1) y + 2 else max_y;
+
+    return YRange{ .min = min_coord_y, .max = max_coord_y };
+}
 
 test "Island.isAdjacentTo adjacent with the same y value" {
     const island = Island{ .max_x = 3, .value = 100, .min_x = 1, .y = 1 };
@@ -170,32 +270,29 @@ test "Island.fromValue value has 1 digits" {
     try std.testing.expectEqual(want, got);
 }
 
-test "Island.getYRange full range" {
-    const island = Island{ .min_x = 2, .max_x = 4, .value = 100, .y = 1 };
-    const got = island.getYRange(4);
+test "getYRange full range" {
+    const got = getYRange(1, 4);
+
     try std.testing.expectEqual(0, got.min);
     try std.testing.expectEqual(3, got.max);
 }
 
-test "Island.getYRange range min limited" {
-    const island = Island{ .min_x = 2, .max_x = 4, .value = 100, .y = 0 };
-    const got = island.getYRange(4);
+test "getYRange range min limited" {
+    const got = getYRange(0, 4);
 
     try std.testing.expectEqual(0, got.min);
     try std.testing.expectEqual(2, got.max);
 }
 
-test "Island.getYRange range max limited" {
-    const island = Island{ .min_x = 2, .max_x = 4, .value = 100, .y = 4 };
-    const got = island.getYRange(4);
+test "getYRange range max limited" {
+    const got = getYRange(4, 4);
 
     try std.testing.expectEqual(3, got.min);
     try std.testing.expectEqual(4, got.max);
 }
 
-test "Island.getYRange range max limited at max - 1" {
-    const island = Island{ .min_x = 2, .max_x = 4, .value = 100, .y = 3 };
-    const got = island.getYRange(4);
+test "getYRange range max limited at max - 1" {
+    const got = getYRange(3, 4);
 
     try std.testing.expectEqual(2, got.min);
     try std.testing.expectEqual(4, got.max);
