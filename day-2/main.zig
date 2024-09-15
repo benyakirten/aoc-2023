@@ -108,9 +108,6 @@ const Game = struct {
 
         var id: u8 = 0;
 
-        var potential_match = std.ArrayList(u8).init(allocator);
-        defer potential_match.deinit();
-
         if (!std.mem.eql(u8, data[0..GAME_INITIAL_WORD.len], GAME_INITIAL_WORD)) {
             return GameError.ParseError;
         }
@@ -132,18 +129,24 @@ const Game = struct {
             id += letter - '0';
         }
 
+        var starting_index: usize = 0;
+        var collecting_match = false;
+
         const raw_matches = data[index..];
         for (raw_matches, 0..) |letter, i| {
             if (letter == ';' or i == raw_matches.len - 1) {
-                if (i == raw_matches.len - 1) {
-                    try potential_match.append(letter);
+                var pos = i;
+                if (pos == raw_matches.len - 1) {
+                    pos += 1;
                 }
 
-                const match = try Match.parseFromString(try potential_match.toOwnedSlice());
+                const match = try Match.parseFromString(raw_matches[starting_index..pos]);
                 try matches.append(match);
-                potential_match.clearAndFree();
-            } else {
-                try potential_match.append(letter);
+
+                collecting_match = false;
+            } else if (!collecting_match) {
+                collecting_match = true;
+                starting_index = i;
             }
         }
 
