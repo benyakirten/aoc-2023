@@ -11,21 +11,26 @@ pub fn main() !void {
     const inputs = try std.fs.cwd().openFile("puzzle_inputs.txt", .{ .mode = .read_only });
     defer inputs.close();
 
-    const cards = try parseCards(inputs, allocator);
-    defer for (cards) |card| {
-        card.deinit();
-    };
-
-    var total_score: u32 = 0;
-    for (cards) |card| {
-        total_score += card.tabulateMultiplicative();
-    }
-
-    std.debug.print("Total Multiplicative Score: {}\n", .{total_score});
+    const multiplicative_score = try getCardsMultiplicativeScore(inputs, allocator);
+    std.debug.print("Total Multiplicative Score: {}\n", .{multiplicative_score});
 
     try inputs.seekTo(0);
     const card_count = try getTotalCardCount(inputs, allocator);
     std.debug.print("Total Card Count: {}\n", .{card_count});
+}
+
+fn getCardsMultiplicativeScore(file: std.fs.File, allocator: std.mem.Allocator) !u32 {
+    var total_score: u32 = 0;
+    const cards = try parseCards(file, allocator);
+
+    for (cards) |card| {
+        total_score += card.tabulateMultiplicative();
+        card.deinit();
+    }
+
+    allocator.free(cards);
+
+    return total_score;
 }
 
 const BUFFER_SIZE: u16 = 1024;
@@ -45,12 +50,15 @@ fn getTotalCardCount(file: std.fs.File, allocator: std.mem.Allocator) !u32 {
         return 1;
     }
 
-    const cardDetail = CardDetails{ .count = 1, .card = first_card.card };
-    cardDetails[0] = cardDetail;
-
     var index: u16 = 0;
     var num_cards: u16 = 0;
     var last_card_index: u32 = 0;
+
+    const cardDetail = CardDetails{ .count = 1, .card = first_card.card };
+    cardDetails[0] = cardDetail;
+    defer for (0..num_cards) |i| {
+        cardDetails[i].card.deinit();
+    };
 
     if (!first_card.has_next) {
         return 1;
@@ -141,11 +149,12 @@ fn parseCards(file: std.fs.File, allocator: std.mem.Allocator) ![]Card {
         if (buf[0] == '\n' or letters_read == 0) {
             if (card_list.items.len > 0) {
                 const card_data = try card_list.toOwnedSlice();
-                defer allocator.free(card_data);
 
                 const card = try Card.fromString(card_data, allocator);
                 try cards.append(card);
+
                 card_list.clearAndFree();
+                allocator.free(card_data);
             }
 
             if (letters_read == 0) {
@@ -156,5 +165,15 @@ fn parseCards(file: std.fs.File, allocator: std.mem.Allocator) ![]Card {
         }
     }
 
-    return try cards.toOwnedSlice();
+    const all_cards = try cards.toOwnedSlice();
+    cards.clearAndFree();
+
+    return all_cards;
+}
+
+test "getTotalCardCount memory does not leak" {
+    const inputs = try std.fs.cwd().openFile("puzzle_inputs.txt", .{ .mode = .read_only });
+    defer inputs.close();
+
+    _ = try getCardsMultiplicativeScore(inputs, std.testing.allocator);
 }
