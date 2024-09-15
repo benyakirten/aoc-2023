@@ -1,6 +1,14 @@
 const std = @import("std");
 
-const Coord = @import("coord.zig").Coord;
+pub const Coord = struct {
+    x: u32,
+    y: u32,
+};
+
+pub const YRange = struct {
+    min: usize,
+    max: usize,
+};
 
 pub const Island = struct {
     value: u16,
@@ -9,15 +17,18 @@ pub const Island = struct {
     y: u16,
 
     pub fn isAdjacentTo(self: Island, coord: Coord) bool {
-        if (coord.y > self.y + 1 or coord.y < self.y - 1) {
+        const min_y: u16 = if (self.y == 0) 0 else self.y - 1;
+        const min_x: u16 = if (self.min_x == 0) 0 else self.min_x - 1;
+
+        if (coord.y == self.y) {
+            return coord.x == min_x or coord.x == self.max_x + 1;
+        }
+
+        if (coord.y > self.y + 1 or coord.y < min_y) {
             return false;
         }
 
-        if (coord.y == self.y) {
-            return coord.x == self.min_x - 1 or coord.x == self.max_x + 1;
-        }
-
-        return coord.x >= self.min_x - 1 and coord.x <= self.max_x + 1;
+        return coord.x >= min_x and coord.x <= self.max_x + 1;
     }
 
     pub fn fromValue(start_x: u16, value: u16, y: u16) Island {
@@ -34,6 +45,15 @@ pub const Island = struct {
             .value = value,
             .y = y,
         };
+    }
+
+    pub fn getYRange(self: Island, max_y: usize) YRange {
+        const island_y = self.y;
+        const min_coord_y: usize = if (island_y > 0) island_y - 1 else 0;
+        // Ranges go from min to max - 1 so we want to return the top value as max + 1
+        const max_coord_y: usize = if (island_y < max_y) island_y + 2 else max_y + 1;
+
+        return YRange{ .min = min_coord_y, .max = max_coord_y };
     }
 };
 
@@ -102,6 +122,14 @@ test "Island.isAdjacentTo within X range but Y offset" {
     }
 }
 
+test "Island.asAdjacentTo will not overflow negative numbers" {
+    const island = Island{ .min_x = 0, .max_x = 2, .value = 100, .y = 0 };
+    const coord = Coord{ .x = 3, .y = 1 };
+
+    const isAdjacent = island.isAdjacentTo(coord);
+    try std.testing.expect(isAdjacent);
+}
+
 test "Island.fromValue value has 3 digits" {
     const got = Island.fromValue(4, 100, 2);
     const want = Island{ .min_x = 4, .max_x = 6, .value = 100, .y = 2 };
@@ -118,4 +146,27 @@ test "Island.fromValue value has 1 digits" {
     const got = Island.fromValue(4, 8, 2);
     const want = Island{ .min_x = 4, .max_x = 4, .value = 8, .y = 2 };
     try std.testing.expectEqual(want, got);
+}
+
+test "Island.getYRange full range" {
+    const island = Island{ .min_x = 2, .max_x = 4, .value = 100, .y = 1 };
+    const got = island.getYRange(4);
+    try std.testing.expectEqual(0, got.min);
+    try std.testing.expectEqual(3, got.max);
+}
+
+test "Island.getYRange range min limited" {
+    const island = Island{ .min_x = 2, .max_x = 4, .value = 100, .y = 0 };
+    const got = island.getYRange(4);
+
+    try std.testing.expectEqual(0, got.min);
+    try std.testing.expectEqual(2, got.max);
+}
+
+test "Island.getYRange range max limited" {
+    const island = Island{ .min_x = 2, .max_x = 4, .value = 100, .y = 4 };
+    const got = island.getYRange(4);
+
+    try std.testing.expectEqual(3, got.min);
+    try std.testing.expectEqual(5, got.max);
 }

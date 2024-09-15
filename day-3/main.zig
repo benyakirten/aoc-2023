@@ -1,7 +1,9 @@
 const std = @import("std");
 
-const Island = @import("island.zig").Island;
-const Coord = @import("coord.zig").Coord;
+const root = @import("root.zig");
+
+const Island = root.Island;
+const Coord = root.Coord;
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -14,11 +16,11 @@ pub fn main() !void {
 
     const inputs = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
 
-    var islands = std.ArrayList(Island).init(allocator);
-    defer islands.deinit();
+    var islands_list = std.ArrayList(Island).init(allocator);
+    defer islands_list.deinit();
 
-    var coords = std.ArrayList([]Coord).init(allocator);
-    defer coords.deinit();
+    var coords_list = std.ArrayList([]Coord).init(allocator);
+    defer coords_list.deinit();
 
     var line_coords = std.ArrayList(Coord).init(allocator);
     defer line_coords.deinit();
@@ -37,8 +39,8 @@ pub fn main() !void {
             y += 1;
 
             const line_coords_slice = try line_coords.toOwnedSlice();
-            try coords.append(line_coords_slice);
-            coords.clearAndFree();
+            try coords_list.append(line_coords_slice);
+            line_coords.clearAndFree();
 
             continue;
         }
@@ -52,7 +54,7 @@ pub fn main() !void {
         } else {
             if (value > 0) {
                 const island = Island.fromValue(value_start_x, value, y);
-                try islands.append(island);
+                try islands_list.append(island);
                 value = 0;
             }
 
@@ -65,5 +67,30 @@ pub fn main() !void {
         x += 1;
     }
 
-    // TODO: Find if islands are adjacent
+    const islands = try islands_list.toOwnedSlice();
+    const coords = try coords_list.toOwnedSlice();
+
+    var sum: u16 = 0;
+
+    for (islands) |island| {
+        sum += getIslandValue(coords, island);
+    }
+
+    std.debug.print("Total: {}\n", .{sum});
+}
+
+fn getIslandValue(coords: [][]Coord, island: Island) u16 {
+    const y_range = island.getYRange(coords.len);
+
+    for (y_range.min..y_range.max) |i| {
+        const potential_coords = coords[i];
+
+        for (potential_coords) |coord| {
+            if (island.isAdjacentTo(coord)) {
+                return island.value;
+            }
+        }
+    }
+
+    return 0;
 }
