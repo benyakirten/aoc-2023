@@ -19,7 +19,7 @@ pub const Card = struct {
         self.allocator.free(self.my_numbers);
     }
 
-    pub fn tabulate(self: Card) u16 {
+    pub fn tabulateMultiplicative(self: Card) u16 {
         var score: u16 = 0;
         for (self.my_numbers) |my_number| {
             for (self.winning_numbers) |winning_number| {
@@ -29,6 +29,19 @@ pub const Card = struct {
                     } else {
                         score *= 2;
                     }
+                }
+            }
+        }
+
+        return score;
+    }
+
+    pub fn tabulate(self: Card) u16 {
+        var score: u16 = 0;
+        for (self.my_numbers) |my_number| {
+            for (self.winning_numbers) |winning_number| {
+                if (my_number == winning_number) {
+                    score += 1;
                 }
             }
         }
@@ -145,58 +158,188 @@ test "Card.fromString" {
     try std.testing.expectEqual(11, card.id);
 }
 
-// I'm sick of dealing with type conversions
-// and the crazy crap I have to do to get it to work.
-// The test has a memory leak but it passes.
-test "Card.tabulate table test" {
-    const TabulateItem = struct { card: []u8, want: u16 };
+test "Card.tabulateMultiplicative 0" {
+    const winning_numbers = [5]u8{ 1, 2, 3, 4, 5 };
+    const winning_numbers_slice = try std.testing.allocator.alloc(u8, 5);
+    winning_numbers_slice[0] = winning_numbers[0];
+    winning_numbers_slice[1] = winning_numbers[1];
+    winning_numbers_slice[2] = winning_numbers[2];
+    winning_numbers_slice[3] = winning_numbers[3];
+    winning_numbers_slice[4] = winning_numbers[4];
 
-    var card_list = std.ArrayList([]u8).init(std.testing.allocator);
-    defer card_list.deinit();
+    const my_numbers = [5]u8{ 6, 7, 8, 9, 10 };
+    const my_numbers_slice = try std.testing.allocator.alloc(u8, 5);
+    my_numbers_slice[0] = my_numbers[0];
+    my_numbers_slice[1] = my_numbers[1];
+    my_numbers_slice[2] = my_numbers[2];
+    my_numbers_slice[3] = my_numbers[3];
+    my_numbers_slice[4] = my_numbers[4];
 
-    var card_list_item_list = std.ArrayList(u8).init(std.testing.allocator);
-    defer card_list_item_list.deinit();
+    const card = Card{
+        .winning_numbers = winning_numbers_slice,
+        .my_numbers = my_numbers_slice,
+        .id = 0,
+        .allocator = std.testing.allocator,
+    };
+    defer card.deinit();
 
-    try card_list_item_list.appendSlice("Card  11:  1 48 83 86 17 |  2  3  6 31  7  9  8 53"[0..]);
-    try card_list.append(try card_list_item_list.toOwnedSlice());
-    card_list_item_list.clearAndFree();
+    const got = card.tabulateMultiplicative();
+    const want: u16 = 0;
 
-    try card_list_item_list.appendSlice("Card  12:  1 48 83 86 17 |  2  3  6 31  7  9 48 53"[0..]);
-    try card_list.append(try card_list_item_list.toOwnedSlice());
-    card_list_item_list.clearAndFree();
+    try std.testing.expectEqual(want, got);
+}
 
-    try card_list_item_list.appendSlice("Card  13:  1 48 83 86 17 |  2  3  6 31 17  9 48 53"[0..]);
-    try card_list.append(try card_list_item_list.toOwnedSlice());
-    card_list_item_list.clearAndFree();
+test "Card.tabulateMultiplicative 1" {
+    const winning_numbers = [5]u8{ 1, 2, 3, 4, 5 };
+    const winning_numbers_slice = try std.testing.allocator.alloc(u8, 5);
+    winning_numbers_slice[0] = winning_numbers[0];
+    winning_numbers_slice[1] = winning_numbers[1];
+    winning_numbers_slice[2] = winning_numbers[2];
+    winning_numbers_slice[3] = winning_numbers[3];
+    winning_numbers_slice[4] = winning_numbers[4];
 
-    try card_list_item_list.appendSlice("Card  14:  1 48 83 86 17 |  2  3 86 31 17  9 48 53"[0..]);
-    try card_list.append(try card_list_item_list.toOwnedSlice());
-    card_list_item_list.clearAndFree();
+    const my_numbers = [5]u8{ 5, 6, 7, 8, 9 };
+    const my_numbers_slice = try std.testing.allocator.alloc(u8, 5);
+    my_numbers_slice[0] = my_numbers[0];
+    my_numbers_slice[1] = my_numbers[1];
+    my_numbers_slice[2] = my_numbers[2];
+    my_numbers_slice[3] = my_numbers[3];
+    my_numbers_slice[4] = my_numbers[4];
 
-    try card_list_item_list.appendSlice("Card  15:  1 48 83 86 17 |  2 83 86 31 17  9 48 53"[0..]);
-    try card_list.append(try card_list_item_list.toOwnedSlice());
-    card_list_item_list.clearAndFree();
+    const card = Card{
+        .winning_numbers = winning_numbers_slice,
+        .my_numbers = my_numbers_slice,
+        .id = 0,
+        .allocator = std.testing.allocator,
+    };
+    defer card.deinit();
 
-    const card_string = try card_list.toOwnedSlice();
-    defer std.testing.allocator.free(card_string);
+    const got = card.tabulateMultiplicative();
+    const want: u16 = 1;
 
-    var tabulate_items_list = std.ArrayList(TabulateItem).init(std.testing.allocator);
-    defer tabulate_items_list.deinit();
+    try std.testing.expectEqual(want, got);
+}
 
-    try tabulate_items_list.append(TabulateItem{ .card = card_string[0], .want = 0 });
-    try tabulate_items_list.append(TabulateItem{ .card = card_string[1], .want = 1 });
-    try tabulate_items_list.append(TabulateItem{ .card = card_string[2], .want = 2 });
-    try tabulate_items_list.append(TabulateItem{ .card = card_string[3], .want = 4 });
-    try tabulate_items_list.append(TabulateItem{ .card = card_string[4], .want = 8 });
+test "Card.tabulateMultiplicative 4" {
+    const winning_numbers = [5]u8{ 1, 2, 3, 4, 5 };
+    const winning_numbers_slice = try std.testing.allocator.alloc(u8, 5);
+    winning_numbers_slice[0] = winning_numbers[0];
+    winning_numbers_slice[1] = winning_numbers[1];
+    winning_numbers_slice[2] = winning_numbers[2];
+    winning_numbers_slice[3] = winning_numbers[3];
+    winning_numbers_slice[4] = winning_numbers[4];
 
-    const tabulate_items = try tabulate_items_list.toOwnedSlice();
-    defer std.testing.allocator.free(tabulate_items);
+    const my_numbers = [5]u8{ 3, 4, 5, 6, 7 };
+    const my_numbers_slice = try std.testing.allocator.alloc(u8, 5);
+    my_numbers_slice[0] = my_numbers[0];
+    my_numbers_slice[1] = my_numbers[1];
+    my_numbers_slice[2] = my_numbers[2];
+    my_numbers_slice[3] = my_numbers[3];
+    my_numbers_slice[4] = my_numbers[4];
 
-    for (tabulate_items) |item| {
-        const card = try Card.fromString(item.card, std.testing.allocator);
-        defer card.deinit();
+    const card = Card{
+        .winning_numbers = winning_numbers_slice,
+        .my_numbers = my_numbers_slice,
+        .id = 0,
+        .allocator = std.testing.allocator,
+    };
+    defer card.deinit();
 
-        const got = card.tabulate();
-        try std.testing.expectEqual(item.want, got);
-    }
+    const got = card.tabulateMultiplicative();
+    const want: u16 = 4;
+
+    try std.testing.expectEqual(want, got);
+}
+
+test "Card.tabulate 0" {
+    const winning_numbers = [5]u8{ 1, 2, 3, 4, 5 };
+    const winning_numbers_slice = try std.testing.allocator.alloc(u8, 5);
+    winning_numbers_slice[0] = winning_numbers[0];
+    winning_numbers_slice[1] = winning_numbers[1];
+    winning_numbers_slice[2] = winning_numbers[2];
+    winning_numbers_slice[3] = winning_numbers[3];
+    winning_numbers_slice[4] = winning_numbers[4];
+
+    const my_numbers = [5]u8{ 6, 7, 8, 9, 10 };
+    const my_numbers_slice = try std.testing.allocator.alloc(u8, 5);
+    my_numbers_slice[0] = my_numbers[0];
+    my_numbers_slice[1] = my_numbers[1];
+    my_numbers_slice[2] = my_numbers[2];
+    my_numbers_slice[3] = my_numbers[3];
+    my_numbers_slice[4] = my_numbers[4];
+
+    const card = Card{
+        .winning_numbers = winning_numbers_slice,
+        .my_numbers = my_numbers_slice,
+        .id = 0,
+        .allocator = std.testing.allocator,
+    };
+    defer card.deinit();
+
+    const got = card.tabulate();
+    const want: u16 = 0;
+
+    try std.testing.expectEqual(want, got);
+}
+
+test "Card.tabulate 1" {
+    const winning_numbers = [5]u8{ 1, 2, 3, 4, 5 };
+    const winning_numbers_slice = try std.testing.allocator.alloc(u8, 5);
+    winning_numbers_slice[0] = winning_numbers[0];
+    winning_numbers_slice[1] = winning_numbers[1];
+    winning_numbers_slice[2] = winning_numbers[2];
+    winning_numbers_slice[3] = winning_numbers[3];
+    winning_numbers_slice[4] = winning_numbers[4];
+
+    const my_numbers = [5]u8{ 5, 6, 7, 8, 9 };
+    const my_numbers_slice = try std.testing.allocator.alloc(u8, 5);
+    my_numbers_slice[0] = my_numbers[0];
+    my_numbers_slice[1] = my_numbers[1];
+    my_numbers_slice[2] = my_numbers[2];
+    my_numbers_slice[3] = my_numbers[3];
+    my_numbers_slice[4] = my_numbers[4];
+
+    const card = Card{
+        .winning_numbers = winning_numbers_slice,
+        .my_numbers = my_numbers_slice,
+        .id = 0,
+        .allocator = std.testing.allocator,
+    };
+    defer card.deinit();
+
+    const got = card.tabulate();
+    const want: u16 = 1;
+
+    try std.testing.expectEqual(want, got);
+}
+
+test "Card.tabulate 3" {
+    const winning_numbers = [5]u8{ 1, 2, 3, 4, 5 };
+    const winning_numbers_slice = try std.testing.allocator.alloc(u8, 5);
+    winning_numbers_slice[0] = winning_numbers[0];
+    winning_numbers_slice[1] = winning_numbers[1];
+    winning_numbers_slice[2] = winning_numbers[2];
+    winning_numbers_slice[3] = winning_numbers[3];
+    winning_numbers_slice[4] = winning_numbers[4];
+
+    const my_numbers = [5]u8{ 3, 4, 5, 6, 7 };
+    const my_numbers_slice = try std.testing.allocator.alloc(u8, 5);
+    my_numbers_slice[0] = my_numbers[0];
+    my_numbers_slice[1] = my_numbers[1];
+    my_numbers_slice[2] = my_numbers[2];
+    my_numbers_slice[3] = my_numbers[3];
+    my_numbers_slice[4] = my_numbers[4];
+
+    const card = Card{
+        .winning_numbers = winning_numbers_slice,
+        .my_numbers = my_numbers_slice,
+        .id = 0,
+        .allocator = std.testing.allocator,
+    };
+    defer card.deinit();
+
+    const got = card.tabulate();
+    const want: u16 = 3;
+
+    try std.testing.expectEqual(want, got);
 }

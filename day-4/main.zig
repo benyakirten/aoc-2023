@@ -9,17 +9,119 @@ pub fn main() !void {
     const allocator = arena.allocator();
 
     const inputs = try std.fs.cwd().openFile("puzzle_inputs.txt", .{ .mode = .read_only });
-    const cards = try parseCards(inputs, allocator);
-    defer for (cards) |card| {
-        card.deinit();
+    defer inputs.close();
+
+    // const cards = try parseCards(inputs, allocator);
+    // defer for (cards) |card| {
+    //     card.deinit();
+    // };
+
+    // var total_score: u32 = 0;
+    // for (cards) |card| {
+    //     total_score += card.tabulateMultiplicative();
+    // }
+
+    // std.debug.print("Total Multiplicative Score: {}\n", .{total_score});
+
+    const card_count = try getTotalCardCount(inputs, allocator);
+    std.debug.print("Total Card Count: {}\n", .{card_count});
+}
+
+const BUFFER_SIZE: u16 = 1024;
+
+fn getTotalCardCount(file: std.fs.File, allocator: std.mem.Allocator) !u32 {
+    var total_card_count: u32 = 0;
+
+    const CardDetails = struct {
+        count: u32,
+        card: Card,
     };
 
-    var total_score: u32 = 0;
-    for (cards) |card| {
-        total_score += card.tabulate();
+    var cardDetails = try allocator.alloc(CardDetails, BUFFER_SIZE);
+
+    const first_card = try getNextCard(file, allocator);
+    if (!first_card.has_next) {
+        return 1;
     }
 
-    std.debug.print("Total score: {}\n", .{total_score});
+    const cardDetail = CardDetails{ .count = 1, .card = first_card.card };
+    cardDetails[0] = cardDetail;
+
+    var index: u16 = 0;
+    var num_cards: u16 = 0;
+    var last_card_index: u32 = 0;
+
+    if (!first_card.has_next) {
+        return 1;
+    }
+
+    while (true) {
+        if (last_card_index != 0 and index > last_card_index) {
+            break;
+        }
+
+        if (index > num_cards) {
+            const next_card = try getNextCard(file, allocator);
+            const new_card_detail = CardDetails{ .count = 1, .card = next_card.card };
+            cardDetails[index] = new_card_detail;
+
+            num_cards += 1;
+
+            if (!next_card.has_next) {
+                total_card_count += 1;
+                break;
+            }
+        }
+
+        const detail = cardDetails[index];
+        total_card_count += detail.count;
+        index += 1;
+
+        const additional_cards = detail.card.tabulate();
+        for (index..index + additional_cards) |i| {
+            if (i > num_cards) {
+                const next_card = try getNextCard(file, allocator);
+                const new_card_detail = CardDetails{ .count = detail.count + 1, .card = next_card.card };
+                cardDetails[i] = new_card_detail;
+                num_cards += 1;
+
+                if (!next_card.has_next) {
+                    last_card_index = @truncate(i);
+                    break;
+                }
+            } else {
+                cardDetails[i].count += detail.count;
+            }
+        }
+    }
+
+    return total_card_count;
+}
+
+const NextCard = struct {
+    card: Card,
+    has_next: bool,
+};
+fn getNextCard(file: std.fs.File, allocator: std.mem.Allocator) !NextCard {
+    const buf = try allocator.alloc(u8, 1);
+    defer allocator.free(buf);
+
+    var card_list = std.ArrayList(u8).init(allocator);
+    defer card_list.deinit();
+
+    while (true) {
+        const letters_read = try file.read(buf);
+
+        if (buf[0] == '\n' or letters_read == 0) {
+            const card_data = try card_list.toOwnedSlice();
+            defer allocator.free(card_data);
+
+            const card = try Card.fromString(card_data, allocator);
+            return NextCard{ .card = card, .has_next = letters_read > 0 };
+        } else {
+            try card_list.append(buf[0]);
+        }
+    }
 }
 
 fn parseCards(file: std.fs.File, allocator: std.mem.Allocator) ![]Card {
@@ -38,6 +140,7 @@ fn parseCards(file: std.fs.File, allocator: std.mem.Allocator) ![]Card {
         if (buf[0] == '\n' or letters_read == 0) {
             if (card_list.items.len > 0) {
                 const card_data = try card_list.toOwnedSlice();
+                defer allocator.free(card_data);
 
                 const card = try Card.fromString(card_data, allocator);
                 try cards.append(card);

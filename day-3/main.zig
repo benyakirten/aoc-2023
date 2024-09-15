@@ -26,6 +26,7 @@ pub fn main() !void {
     const allocator = arena.allocator();
 
     const inputs = try std.fs.cwd().openFile("puzzle_inputs.txt", .{ .mode = .read_only });
+    defer inputs.close();
 
     const islandsAndCoords = try getIslandsAndCoords(inputs, allocator);
     defer islandsAndCoords.deinit();

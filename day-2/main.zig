@@ -15,6 +15,7 @@ pub fn main() !void {
     const allocator = arena.allocator();
 
     const inputs = try std.fs.cwd().openFile("puzzle_inputs.txt", .{ .mode = .read_only });
+    defer inputs.close();
 
     const games = try Game.allGamesFromFile(inputs, allocator);
     defer Game.deinitAll(games);
