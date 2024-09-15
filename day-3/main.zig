@@ -14,7 +14,7 @@ pub fn main() !void {
     const buf = try allocator.alloc(u8, 1);
     defer allocator.free(buf);
 
-    const inputs = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    const inputs = try std.fs.cwd().openFile("puzzle_inputs.txt", .{ .mode = .read_only });
 
     var islands_list = std.ArrayList(Island).init(allocator);
     defer islands_list.deinit();
@@ -70,10 +70,12 @@ pub fn main() !void {
     const islands = try islands_list.toOwnedSlice();
     const coords = try coords_list.toOwnedSlice();
 
-    var sum: u16 = 0;
+    var sum: u32 = 0;
 
     for (islands) |island| {
-        sum += getIslandValue(coords, island);
+        const val = getIslandValue(coords, island);
+        std.debug.print("Adding {} to {}\n\n", .{ val, sum });
+        sum += val;
     }
 
     std.debug.print("Total: {}\n", .{sum});
@@ -81,8 +83,10 @@ pub fn main() !void {
 
 fn getIslandValue(coords: [][]Coord, island: Island) u16 {
     const y_range = island.getYRange(coords.len);
+    std.debug.print("Examining range from {} to {} for {}\n", .{ y_range.min, y_range.max, island.value });
 
     for (y_range.min..y_range.max) |i| {
+        std.debug.print("line {}\n", .{i});
         const potential_coords = coords[i];
 
         for (potential_coords) |coord| {

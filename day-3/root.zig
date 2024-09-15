@@ -50,8 +50,7 @@ pub const Island = struct {
     pub fn getYRange(self: Island, max_y: usize) YRange {
         const island_y = self.y;
         const min_coord_y: usize = if (island_y > 0) island_y - 1 else 0;
-        // Ranges go from min to max - 1 so we want to return the top value as max + 1
-        const max_coord_y: usize = if (island_y < max_y) island_y + 2 else max_y + 1;
+        const max_coord_y: usize = if (island_y < max_y - 1) island_y + 2 else max_y;
 
         return YRange{ .min = min_coord_y, .max = max_coord_y };
     }
@@ -168,5 +167,13 @@ test "Island.getYRange range max limited" {
     const got = island.getYRange(4);
 
     try std.testing.expectEqual(3, got.min);
-    try std.testing.expectEqual(5, got.max);
+    try std.testing.expectEqual(4, got.max);
+}
+
+test "Island.getYRange range max limited at max - 1" {
+    const island = Island{ .min_x = 2, .max_x = 4, .value = 100, .y = 3 };
+    const got = island.getYRange(4);
+
+    try std.testing.expectEqual(2, got.min);
+    try std.testing.expectEqual(4, got.max);
 }
