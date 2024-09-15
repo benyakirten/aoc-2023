@@ -11,18 +11,19 @@ pub fn main() !void {
     const inputs = try std.fs.cwd().openFile("puzzle_inputs.txt", .{ .mode = .read_only });
     defer inputs.close();
 
-    // const cards = try parseCards(inputs, allocator);
-    // defer for (cards) |card| {
-    //     card.deinit();
-    // };
+    const cards = try parseCards(inputs, allocator);
+    defer for (cards) |card| {
+        card.deinit();
+    };
 
-    // var total_score: u32 = 0;
-    // for (cards) |card| {
-    //     total_score += card.tabulateMultiplicative();
-    // }
+    var total_score: u32 = 0;
+    for (cards) |card| {
+        total_score += card.tabulateMultiplicative();
+    }
 
-    // std.debug.print("Total Multiplicative Score: {}\n", .{total_score});
+    std.debug.print("Total Multiplicative Score: {}\n", .{total_score});
 
+    try inputs.seekTo(0);
     const card_count = try getTotalCardCount(inputs, allocator);
     std.debug.print("Total Card Count: {}\n", .{card_count});
 }
