@@ -43,7 +43,8 @@ fn getTotalCardCount(file: std.fs.File, allocator: std.mem.Allocator) !u32 {
         card: Card,
     };
 
-    var cardDetails = try allocator.alloc(CardDetails, BUFFER_SIZE);
+    var card_details = try allocator.alloc(CardDetails, BUFFER_SIZE);
+    defer allocator.free(card_details);
 
     const first_card = try getNextCard(file, allocator);
     if (!first_card.has_next) {
@@ -54,10 +55,10 @@ fn getTotalCardCount(file: std.fs.File, allocator: std.mem.Allocator) !u32 {
     var num_cards: u16 = 0;
     var last_card_index: u32 = 0;
 
-    const cardDetail = CardDetails{ .count = 1, .card = first_card.card };
-    cardDetails[0] = cardDetail;
-    defer for (0..num_cards) |i| {
-        cardDetails[i].card.deinit();
+    const first_card_detail = CardDetails{ .count = 1, .card = first_card.card };
+    card_details[0] = first_card_detail;
+    defer for (0..last_card_index) |i| {
+        card_details[i].card.deinit();
     };
 
     if (!first_card.has_next) {
@@ -72,7 +73,7 @@ fn getTotalCardCount(file: std.fs.File, allocator: std.mem.Allocator) !u32 {
         if (index > num_cards) {
             const next_card = try getNextCard(file, allocator);
             const new_card_detail = CardDetails{ .count = 1, .card = next_card.card };
-            cardDetails[index] = new_card_detail;
+            card_details[index] = new_card_detail;
 
             num_cards += 1;
 
@@ -82,7 +83,7 @@ fn getTotalCardCount(file: std.fs.File, allocator: std.mem.Allocator) !u32 {
             }
         }
 
-        const detail = cardDetails[index];
+        const detail = card_details[index];
         total_card_count += detail.count;
         index += 1;
 
@@ -91,7 +92,7 @@ fn getTotalCardCount(file: std.fs.File, allocator: std.mem.Allocator) !u32 {
             if (i > num_cards) {
                 const next_card = try getNextCard(file, allocator);
                 const new_card_detail = CardDetails{ .count = detail.count + 1, .card = next_card.card };
-                cardDetails[i] = new_card_detail;
+                card_details[i] = new_card_detail;
                 num_cards += 1;
 
                 if (!next_card.has_next) {
@@ -99,7 +100,7 @@ fn getTotalCardCount(file: std.fs.File, allocator: std.mem.Allocator) !u32 {
                     break;
                 }
             } else {
-                cardDetails[i].count += detail.count;
+                card_details[i].count += detail.count;
             }
         }
     }
@@ -171,9 +172,17 @@ fn parseCards(file: std.fs.File, allocator: std.mem.Allocator) ![]Card {
     return all_cards;
 }
 
-test "getTotalCardCount memory does not leak" {
+test "getCardsMultiplicativeScore memory does not leak" {
     const inputs = try std.fs.cwd().openFile("puzzle_inputs.txt", .{ .mode = .read_only });
     defer inputs.close();
 
     _ = try getCardsMultiplicativeScore(inputs, std.testing.allocator);
+}
+
+// TODO: Figure out the memory leak
+test "getTotalCardCount memory does not leak" {
+    const inputs = try std.fs.cwd().openFile("puzzle_inputs.txt", .{ .mode = .read_only });
+    defer inputs.close();
+
+    _ = try getTotalCardCount(inputs, std.testing.allocator);
 }
