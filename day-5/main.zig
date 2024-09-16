@@ -52,30 +52,11 @@ fn determineLocationNumber(file: std.fs.File, allocator: std.mem.Allocator) !See
     }
 
     for (HEADERS) |header| {
+        std.debug.print("{s}\n", .{header});
         const maps = try readMaps(file, allocator, header);
         seeds.applyMaps(maps);
+        std.debug.print("\n", .{});
     }
-
-    // const seed_to_soil_maps = try readMaps(file, allocator, SEED_TO_SOIL_HEADER);
-    // seeds.applyMaps(seed_to_soil_maps);
-
-    // const soil_to_fertilizer_maps = try readMaps(file, allocator, SOIL_TO_FERTILIZER_HEADER);
-    // seeds.applyMaps(soil_to_fertilizer_maps);
-
-    // const fertilizer_to_water_maps = try readMaps(file, allocator, FERTILIZER_TO_WATER_HEADER);
-    // seeds.applyMaps(fertilizer_to_water_maps);
-
-    // const water_to_light_maps = try readMaps(file, allocator, WATER_TO_LIGHT_HEADER);
-    // seeds.applyMaps(water_to_light_maps);
-
-    // const light_to_temperature_maps = try readMaps(file, allocator, LIGHT_TO_TEMPERATURE_HEADER);
-    // seeds.applyMaps(light_to_temperature_maps);
-
-    // const temperature_to_humidity_maps = try readMaps(file, allocator, TEMPERATURE_TO_HUMIDITY_HEADER);
-    // seeds.applyMaps(temperature_to_humidity_maps);
-
-    // const humidity_to_location_maps = try readMaps(file, allocator, HUMIDITY_TO_LOCATION_HEADER);
-    // seeds.applyMaps(humidity_to_location_maps);
 
     return seeds;
 }

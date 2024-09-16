@@ -33,7 +33,7 @@ pub const Seeds = struct {
 
         var latest_seed: u32 = 0;
         for (src[header_length..], header_length..) |letter, i| {
-            if (letter == ' ' or i == src.len - 1) {
+            if (letter == ' ') {
                 try seeds_list.append(latest_seed);
                 latest_seed = 0;
                 continue;
@@ -44,6 +44,10 @@ pub const Seeds = struct {
             }
 
             latest_seed = latest_seed * 10 + letter - '0';
+
+            if (i == src.len - 1) {
+                try seeds_list.append(latest_seed);
+            }
         }
 
         const seeds = try seeds_list.toOwnedSlice();
@@ -51,29 +55,42 @@ pub const Seeds = struct {
     }
 
     pub fn applyMaps(self: Seeds, maps: []Map) void {
-        for (maps) |map| {
-            self.applyMap(map);
-        }
-    }
-
-    pub fn applyMap(self: Seeds, map: Map) void {
         for (self.seeds, 0..) |seed, i| {
-            if (seed >= map.source and seed < map.source + map.len) {
-                const offset = seed - map.source;
-                self.seeds[i] = map.destination + offset;
+            for (maps) |map| {
+                if (seed >= map.source and seed < map.source + map.len) {
+                    const offset = seed - map.source;
+                    self.seeds[i] = map.destination + offset;
+                }
             }
         }
     }
 };
 
-test "applyMap mutates the seeds by the map if they are a part of the map" {
+test "applyMaps mutates the seeds by the map if they are a part of the map" {
     var seed_data = [5]u32{ 0, 1, 2, 3, 4 };
-    const seeds = Seeds{ .seeds = seed_data[0..] };
+    const seeds = Seeds{ .seeds = seed_data[0..], .allocator = std.testing.allocator };
 
-    const map = Map{ .source = 2, .destination = 15, .len = 2 };
+    var maps_data = [1]Map{Map{ .source = 2, .destination = 15, .len = 2 }};
+    const maps: []Map = maps_data[0..];
 
-    seeds.applyMap(map);
+    seeds.applyMaps(maps);
 
     var want = [5]u32{ 0, 1, 15, 16, 4 };
+    try std.testing.expectEqualDeep(seeds.seeds, want[0..]);
+}
+
+test "applyMaps will only transform the base value" {
+    var seed_data = [5]u32{ 0, 1, 2, 3, 4 };
+    const seeds = Seeds{ .seeds = seed_data[0..], .allocator = std.testing.allocator };
+
+    var maps_data = [2]Map{
+        Map{ .source = 2, .destination = 15, .len = 3 },
+        Map{ .source = 15, .destination = 25, .len = 2 },
+    };
+    const maps: []Map = maps_data[0..];
+
+    seeds.applyMaps(maps);
+
+    var want = [5]u32{ 0, 1, 15, 16, 17 };
     try std.testing.expectEqualDeep(seeds.seeds, want[0..]);
 }
