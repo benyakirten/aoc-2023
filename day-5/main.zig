@@ -2,7 +2,7 @@ const std = @import("std");
 
 const root = @import("root.zig");
 const Seeds = @import("seeds.zig").Seeds;
-const SeedsError = @import("seeds.zig").SeedsError;
+const SeedRanges = @import("seeds.zig").SeedRanges;
 const Map = @import("map.zig").Map;
 
 const SEED_TO_SOIL_HEADER: []const u8 = "seed-to-soil map:"[0..];
@@ -33,26 +33,39 @@ pub fn main() !void {
     const inputs = try std.fs.cwd().openFile("puzzle_input.txt", .{ .mode = .read_only });
     defer inputs.close();
 
-    const seeds = try determineEarliestLocation(inputs, allocator, Seeds.parseSeedRanges);
-    defer seeds.deinit();
+    const nominal_seeds = try getNominalSeeds(inputs, allocator);
+    defer nominal_seeds.deinit();
 
     var min: usize = std.math.maxInt(usize);
-    for (seeds.seeds) |seed| {
+    for (nominal_seeds.seeds) |seed| {
         if (seed < min) {
             min = seed;
         }
     }
 
-    std.debug.print("{d}\n", .{min});
+    std.debug.print("Earliest Nominal Seed Location: {d}\n", .{min});
+
+    try inputs.seekTo(0);
+
+    const range_seeds = try getSeedRanges(inputs, allocator);
+    min = std.math.maxInt(usize);
+
+    for (range_seeds.seed_ranges) |range| {
+        if (range.start < min) {
+            min = range.start;
+        }
+    }
+
+    std.debug.print("Earliest Range Seed Location: {d}\n", .{min});
 }
 
-fn determineEarliestLocation(file: std.fs.File, allocator: std.mem.Allocator, comptime seeds_function: fn (src: []u8, allocator: std.mem.Allocator) SeedsError!Seeds) !Seeds {
+fn getNominalSeeds(file: std.fs.File, allocator: std.mem.Allocator) !Seeds {
     const seed_data = try root.readLine(file, allocator);
     if (seed_data.done) {
         return LocationDeterminationError.FileFormatError;
     }
 
-    var seeds = try seeds_function(seed_data.data, allocator);
+    var seeds = try Seeds.fromString(seed_data.data, allocator);
 
     const empty_line = try root.readLine(file, allocator);
     if (empty_line.done or !std.mem.eql(u8, empty_line.data, "")) {
@@ -87,4 +100,25 @@ fn readMaps(file: std.fs.File, allocator: std.mem.Allocator, header: []const u8)
     }
 
     return try map_list.toOwnedSlice();
+}
+
+fn getSeedRanges(file: std.fs.File, allocator: std.mem.Allocator) !SeedRanges {
+    const seed_data = try root.readLine(file, allocator);
+    if (seed_data.done) {
+        return LocationDeterminationError.FileFormatError;
+    }
+
+    var seeds = try SeedRanges.fromString(seed_data.data, allocator);
+
+    const empty_line = try root.readLine(file, allocator);
+    if (empty_line.done or !std.mem.eql(u8, empty_line.data, "")) {
+        return LocationDeterminationError.FileFormatError;
+    }
+
+    for (HEADERS) |header| {
+        const maps = try readMaps(file, allocator, header);
+        seeds = try seeds.applyMaps(maps);
+    }
+
+    return seeds;
 }
