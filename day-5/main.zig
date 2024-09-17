@@ -2,6 +2,7 @@ const std = @import("std");
 
 const root = @import("root.zig");
 const Seeds = @import("seeds.zig").Seeds;
+const SeedsError = @import("seeds.zig").SeedsError;
 const Map = @import("map.zig").Map;
 
 const SEED_TO_SOIL_HEADER: []const u8 = "seed-to-soil map:"[0..];
@@ -32,7 +33,7 @@ pub fn main() !void {
     const inputs = try std.fs.cwd().openFile("puzzle_input.txt", .{ .mode = .read_only });
     defer inputs.close();
 
-    const seeds = try determineLocationNumber(inputs, allocator);
+    const seeds = try determineEarliestLocation(inputs, allocator, Seeds.parseSeedRanges);
     defer seeds.deinit();
 
     var min: usize = std.math.maxInt(usize);
@@ -45,13 +46,13 @@ pub fn main() !void {
     std.debug.print("{d}\n", .{min});
 }
 
-fn determineLocationNumber(file: std.fs.File, allocator: std.mem.Allocator) !Seeds {
+fn determineEarliestLocation(file: std.fs.File, allocator: std.mem.Allocator, comptime seeds_function: fn (src: []u8, allocator: std.mem.Allocator) SeedsError!Seeds) !Seeds {
     const seed_data = try root.readLine(file, allocator);
     if (seed_data.done) {
         return LocationDeterminationError.FileFormatError;
     }
 
-    var seeds = try Seeds.fromString(seed_data.data, allocator);
+    var seeds = try seeds_function(seed_data.data, allocator);
 
     const empty_line = try root.readLine(file, allocator);
     if (empty_line.done or !std.mem.eql(u8, empty_line.data, "")) {

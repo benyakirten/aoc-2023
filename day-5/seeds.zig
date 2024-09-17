@@ -4,7 +4,7 @@ const Map = @import("map.zig").Map;
 
 const SEEDS_HEADER: []const u8 = "seeds: "[0..];
 
-pub const SeedsError = error{ ParsingError, HeaderError };
+pub const SeedsError = error{ ParsingError, HeaderError, AllocationError };
 pub const Seeds = struct {
     seeds: []usize,
     allocator: std.mem.Allocator,
@@ -21,7 +21,65 @@ pub const Seeds = struct {
         self.allocator.free(self.seeds);
     }
 
-    pub fn fromString(src: []u8, allocator: std.mem.Allocator) !Seeds {
+    pub fn parseSeedRanges(src: []u8, allocator: std.mem.Allocator) SeedsError!Seeds {
+        const header_length = SEEDS_HEADER.len;
+        const header = src[0..header_length];
+        if (!std.mem.eql(u8, header, SEEDS_HEADER)) {
+            return SeedsError.HeaderError;
+        }
+
+        var seeds_list = std.ArrayList(usize).init(allocator);
+        defer seeds_list.deinit();
+
+        var latest_seed: usize = 0;
+        var range_length: usize = 0;
+        var parsing_seed_start = true;
+
+        for (src[header_length..], header_length..) |letter, i| {
+            if (letter == ' ') {
+                if (!parsing_seed_start) {
+                    for (latest_seed..latest_seed + range_length) |j| {
+                        seeds_list.append(j) catch {
+                            return SeedsError.AllocationError;
+                        };
+                    }
+
+                    latest_seed = 0;
+                    range_length = 0;
+                }
+
+                parsing_seed_start = !parsing_seed_start;
+                continue;
+            }
+
+            if (letter < '0' or letter > '9') {
+                return SeedsError.ParsingError;
+            }
+
+            const val = letter - '0';
+
+            if (parsing_seed_start) {
+                latest_seed = latest_seed * 10 + val;
+            } else {
+                range_length = range_length * 10 + val;
+            }
+
+            if (i == src.len - 1) {
+                for (latest_seed..latest_seed + range_length) |j| {
+                    seeds_list.append(j) catch {
+                        return SeedsError.AllocationError;
+                    };
+                }
+            }
+        }
+
+        const seeds = seeds_list.toOwnedSlice() catch {
+            return SeedsError.AllocationError;
+        };
+        return Seeds{ .seeds = seeds, .allocator = allocator };
+    }
+
+    pub fn fromString(src: []u8, allocator: std.mem.Allocator) SeedsError!Seeds {
         const header_length = SEEDS_HEADER.len;
         const header = src[0..header_length];
         if (!std.mem.eql(u8, header, SEEDS_HEADER)) {
@@ -34,7 +92,9 @@ pub const Seeds = struct {
         var latest_seed: usize = 0;
         for (src[header_length..], header_length..) |letter, i| {
             if (letter == ' ') {
-                try seeds_list.append(latest_seed);
+                seeds_list.append(latest_seed) catch {
+                    return SeedsError.AllocationError;
+                };
                 latest_seed = 0;
                 continue;
             }
@@ -46,11 +106,15 @@ pub const Seeds = struct {
             latest_seed = latest_seed * 10 + letter - '0';
 
             if (i == src.len - 1) {
-                try seeds_list.append(latest_seed);
+                seeds_list.append(latest_seed) catch {
+                    return SeedsError.AllocationError;
+                };
             }
         }
 
-        const seeds = try seeds_list.toOwnedSlice();
+        const seeds = seeds_list.toOwnedSlice() catch {
+            return SeedsError.AllocationError;
+        };
         return Seeds{ .seeds = seeds, .allocator = allocator };
     }
 
