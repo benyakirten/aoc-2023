@@ -102,6 +102,7 @@ fn readMaps(file: std.fs.File, allocator: std.mem.Allocator, header: []const u8)
     return try map_list.toOwnedSlice();
 }
 
+// TODO: Figure out why this gives two seeds that are smaller than the correct answer
 fn getSeedRanges(file: std.fs.File, allocator: std.mem.Allocator) !SeedRanges {
     const seed_data = try root.readLine(file, allocator);
     if (seed_data.done) {
