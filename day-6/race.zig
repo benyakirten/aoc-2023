@@ -11,6 +11,7 @@ pub const Race = struct {
         return time_traveling * time_held;
     }
 
+    // TODO: Figure out the algebraic formula and make this run in constant time
     pub fn getHeldTimesSuperiorToDistance(self: Race, allocator: std.mem.Allocator) ![]usize {
         var held_time_list = std.ArrayList(usize).init(allocator);
         defer held_time_list.deinit();
@@ -58,6 +59,74 @@ pub const Races = struct {
     races: []Race,
     allocator: std.mem.Allocator,
 
+    pub fn deinit(self: Races) void {
+        self.allocator.free(self.races);
+    }
+
+    pub fn fromFileConsolidated(file: std.fs.File, allocator: std.mem.Allocator) !Races {
+        const buf = try allocator.alloc(u8, 1);
+        defer allocator.free(buf);
+
+        const time_header_buf = try allocator.alloc(u8, TIME_HEADER.len);
+        defer allocator.free(time_header_buf);
+
+        var data_read = try file.read(time_header_buf);
+        if (data_read != TIME_HEADER.len or !std.mem.eql(u8, time_header_buf, TIME_HEADER)) {
+            return RaceError.ReadError;
+        }
+
+        var time: usize = 0;
+        while (true) {
+            data_read = try file.read(buf);
+            if (buf[0] == ' ') {
+                continue;
+            }
+
+            if (buf[0] == '\n') {
+                break;
+            }
+
+            if (data_read == 0 or buf[0] < '0' or buf[0] > '9') {
+                return RaceError.ReadError;
+            }
+
+            time = time * 10 + buf[0] - '0';
+        }
+
+        const distance_header_buf = try allocator.alloc(u8, DISTANCE_HEADER.len);
+        defer allocator.free(distance_header_buf);
+
+        data_read = try file.read(distance_header_buf);
+        if (data_read != DISTANCE_HEADER.len or !std.mem.eql(u8, distance_header_buf, DISTANCE_HEADER)) {
+            return RaceError.ReadError;
+        }
+
+        var distance: usize = 0;
+        while (true) {
+            data_read = try file.read(buf);
+            if (buf[0] == ' ') {
+                continue;
+            }
+            if (data_read == 0) {
+                break;
+            }
+
+            if (buf[0] < '0' or buf[0] > '9') {
+                return RaceError.ReadError;
+            }
+
+            distance = distance * 10 + buf[0] - '0';
+        }
+
+        const races = try allocator.alloc(Race, 1);
+        races[0] = Race{ .distance = distance, .time = time };
+
+        return Races{
+            .races = races,
+            .allocator = allocator,
+        };
+    }
+
     pub fn fromFile(file: std.fs.File, allocator: std.mem.Allocator) !Races {
         var time_list = std.ArrayList(usize).init(allocator);
         defer time_list.deinit();
@@ -66,6 +135,8 @@ pub const Races = struct {
         defer allocator.free(buf);
 
         const time_header_buf = try allocator.alloc(u8, TIME_HEADER.len);
+        defer allocator.free(time_header_buf);
+
         var data_read = try file.read(time_header_buf);
         if (data_read != TIME_HEADER.len or !std.mem.eql(u8, time_header_buf, TIME_HEADER)) {
             return RaceError.ReadError;
@@ -98,6 +169,8 @@ pub const Races = struct {
         defer distance_list.deinit();
 
         const distance_header_buf = try allocator.alloc(u8, DISTANCE_HEADER.len);
+        defer allocator.free(distance_header_buf);
+
         data_read = try file.read(distance_header_buf);
         if (data_read != DISTANCE_HEADER.len or !std.mem.eql(u8, distance_header_buf, DISTANCE_HEADER)) {
             return RaceError.ReadError;
@@ -158,15 +231,72 @@ pub const Races = struct {
         return Races{ .races = races, .allocator = allocator };
     }
 
-    pub fn getAllHoldTimesSuperiorToDistance(self: Races) ![]usize {
+    pub fn getWaysToWinByRace(self: Races) ![]usize {
         var hold_times_list = std.ArrayList(usize).init(self.allocator);
         defer hold_times_list.deinit();
 
         for (self.races) |race| {
             const hold_times = try race.getHeldTimesSuperiorToDistance(self.allocator);
             try hold_times_list.append(hold_times.len);
+            self.allocator.free(hold_times);
         }
 
         return try hold_times_list.toOwnedSlice();
     }
 };
+
+test "Races.fromFileConsolidated returns Races with one Race" {
+    const file = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer file.close();
+
+    const got = try Races.fromFileConsolidated(file, std.testing.allocator);
+    defer got.deinit();
+
+    const want_races = try std.testing.allocator.alloc(Race, 1);
+    want_races[0] = Race{ .distance = 940200, .time = 71530 };
+
+    const want = Races{ .allocator = std.testing.allocator, .races = want_races };
+    defer want.deinit();
+
+    try std.testing.expectEqualDeep(want.races, got.races);
+}
+
+test "Races.fromFile returns Races with multiple races" {
+    const file = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer file.close();
+
+    const got = try Races.fromFile(file, std.testing.allocator);
+    defer got.deinit();
+
+    const want_races = try std.testing.allocator.alloc(Race, 3);
+    want_races[0] = Race{ .distance = 9, .time = 7 };
+    want_races[1] = Race{ .distance = 40, .time = 15 };
+    want_races[2] = Race{ .distance = 200, .time = 30 };
+
+    const want = Races{ .allocator = std.testing.allocator, .races = want_races };
+    defer want.deinit();
+
+    try std.testing.expectEqualDeep(want.races, got.races);
+}
+
+test "Races.getWaysToWinRace will return a slice of all the ways that each race can be won" {
+    const all_races = try std.testing.allocator.alloc(Race, 3);
+    all_races[0] = Race{ .distance = 9, .time = 7 };
+    all_races[1] = Race{ .distance = 40, .time = 15 };
+    all_races[2] = Race{ .distance = 200, .time = 30 };
+
+    const races = Races{ .allocator = std.testing.allocator, .races = all_races };
+    defer races.deinit();
+
+    const got = try races.getWaysToWinByRace();
+    defer std.testing.allocator.free(got);
+
+    const want = try std.testing.allocator.alloc(usize, 3);
+    defer std.testing.allocator.free(want);
+
+    want[0] = 4;
+    want[1] = 8;
+    want[2] = 9;
+
+    try std.testing.expectEqualDeep(want, got);
+}
