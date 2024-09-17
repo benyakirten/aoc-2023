@@ -29,15 +29,15 @@ test "CurrentlyParsing.advance modifies the internal state" {
 }
 
 pub const Map = struct {
-    destination: u32,
-    source: u32,
-    len: u32,
+    destination: usize,
+    source: usize,
+    len: usize,
 
     pub fn fromString(src: []u8) !Map {
         var currentlyParsing = CurrentlyParsing.Destination;
-        var destination: u32 = 0;
-        var source: u32 = 0;
-        var len: u32 = 0;
+        var destination: usize = 0;
+        var source: usize = 0;
+        var len: usize = 0;
 
         for (src) |letter| {
             if (letter == ' ') {

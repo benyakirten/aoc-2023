@@ -6,7 +6,7 @@ const SEEDS_HEADER: []const u8 = "seeds: "[0..];
 
 pub const SeedsError = error{ ParsingError, HeaderError };
 pub const Seeds = struct {
-    seeds: []u32,
+    seeds: []usize,
     allocator: std.mem.Allocator,
 
     pub fn print(self: Seeds) void {
@@ -28,10 +28,10 @@ pub const Seeds = struct {
             return SeedsError.HeaderError;
         }
 
-        var seeds_list = std.ArrayList(u32).init(allocator);
+        var seeds_list = std.ArrayList(usize).init(allocator);
         defer seeds_list.deinit();
 
-        var latest_seed: u32 = 0;
+        var latest_seed: usize = 0;
         for (src[header_length..], header_length..) |letter, i| {
             if (letter == ' ') {
                 try seeds_list.append(latest_seed);
@@ -67,7 +67,7 @@ pub const Seeds = struct {
 };
 
 test "applyMaps mutates the seeds by the map if they are a part of the map" {
-    var seed_data = [5]u32{ 0, 1, 2, 3, 4 };
+    var seed_data = [5]usize{ 0, 1, 2, 3, 4 };
     const seeds = Seeds{ .seeds = seed_data[0..], .allocator = std.testing.allocator };
 
     var maps_data = [1]Map{Map{ .source = 2, .destination = 15, .len = 2 }};
@@ -75,12 +75,12 @@ test "applyMaps mutates the seeds by the map if they are a part of the map" {
 
     seeds.applyMaps(maps);
 
-    var want = [5]u32{ 0, 1, 15, 16, 4 };
+    var want = [5]usize{ 0, 1, 15, 16, 4 };
     try std.testing.expectEqualDeep(seeds.seeds, want[0..]);
 }
 
 test "applyMaps will only transform the base value" {
-    var seed_data = [5]u32{ 0, 1, 2, 3, 4 };
+    var seed_data = [5]usize{ 0, 1, 2, 3, 4 };
     const seeds = Seeds{ .seeds = seed_data[0..], .allocator = std.testing.allocator };
 
     var maps_data = [2]Map{
@@ -91,6 +91,6 @@ test "applyMaps will only transform the base value" {
 
     seeds.applyMaps(maps);
 
-    var want = [5]u32{ 0, 1, 15, 16, 17 };
+    var want = [5]usize{ 0, 1, 15, 16, 17 };
     try std.testing.expectEqualDeep(seeds.seeds, want[0..]);
 }

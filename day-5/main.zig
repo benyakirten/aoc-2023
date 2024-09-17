@@ -29,13 +29,20 @@ pub fn main() !void {
 
     const allocator = arena.allocator();
 
-    const inputs = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    const inputs = try std.fs.cwd().openFile("puzzle_input.txt", .{ .mode = .read_only });
     defer inputs.close();
 
     const seeds = try determineLocationNumber(inputs, allocator);
     defer seeds.deinit();
 
-    seeds.print();
+    var min: usize = std.math.maxInt(usize);
+    for (seeds.seeds) |seed| {
+        if (seed < min) {
+            min = seed;
+        }
+    }
+
+    std.debug.print("{d}\n", .{min});
 }
 
 fn determineLocationNumber(file: std.fs.File, allocator: std.mem.Allocator) !Seeds {
@@ -52,10 +59,8 @@ fn determineLocationNumber(file: std.fs.File, allocator: std.mem.Allocator) !See
     }
 
     for (HEADERS) |header| {
-        std.debug.print("{s}\n", .{header});
         const maps = try readMaps(file, allocator, header);
         seeds.applyMaps(maps);
-        std.debug.print("\n", .{});
     }
 
     return seeds;
