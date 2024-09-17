@@ -3,11 +3,11 @@ const std = @import("std");
 pub const RaceError = error{ ParsingError, ReadError };
 
 pub const Race = struct {
-    distance: u16,
-    time: u16,
+    distance: usize,
+    time: usize,
 
-    pub fn getDistanceTraveled(time_held: u16, max_time: u16) u32 {
-        const time_traveling: u16 = max_time - time_held;
+    pub fn getDistanceTraveled(time_held: usize, max_time: usize) usize {
+        const time_traveling: usize = max_time - time_held;
         return time_traveling * time_held;
     }
 
@@ -59,10 +59,10 @@ pub const Races = struct {
     allocator: std.mem.Allocator,
 
     pub fn fromFile(file: std.fs.File, allocator: std.mem.Allocator) !Races {
-        const time_list = std.ArrayList(u16).init(allocator);
+        var time_list = std.ArrayList(usize).init(allocator);
         defer time_list.deinit();
 
-        const buf = allocator.alloc(u8, 1);
+        const buf = try allocator.alloc(u8, 1);
         defer allocator.free(buf);
 
         const time_header_buf = try allocator.alloc(u8, TIME_HEADER.len);
@@ -71,20 +71,20 @@ pub const Races = struct {
             return RaceError.ReadError;
         }
 
-        var time: u16 = 0;
+        var time: usize = 0;
         while (true) {
             data_read = try file.read(buf);
-            if (buf[0] == ' ') {
+            if (buf[0] == ' ' or buf[0] == '\n') {
                 if (time != 0) {
                     try time_list.append(time);
                     time = 0;
                 }
 
-                continue;
-            }
-
-            if (buf[0] == '\n') {
-                break;
+                if (buf[0] == '\n') {
+                    break;
+                } else {
+                    continue;
+                }
             }
 
             if (data_read == 0 or buf[0] < '0' or buf[0] > '9') {
@@ -94,29 +94,29 @@ pub const Races = struct {
             time = time * 10 + buf[0] - '0';
         }
 
-        const distance_list = std.ArrayList(u16).init(allocator);
+        var distance_list = std.ArrayList(usize).init(allocator);
         defer distance_list.deinit();
 
         const distance_header_buf = try allocator.alloc(u8, DISTANCE_HEADER.len);
         data_read = try file.read(distance_header_buf);
-        if (data_read != DISTANCE_HEADER.len or !std.mem.eql(u8, time_header_buf, DISTANCE_HEADER)) {
+        if (data_read != DISTANCE_HEADER.len or !std.mem.eql(u8, distance_header_buf, DISTANCE_HEADER)) {
             return RaceError.ReadError;
         }
 
-        var distance: u16 = 0;
+        var distance: usize = 0;
         while (true) {
             data_read = try file.read(buf);
-            if (buf[0] == ' ') {
-                if (time != 0) {
+            if (buf[0] == ' ' or data_read == 0) {
+                if (distance != 0) {
                     try distance_list.append(distance);
                     distance = 0;
                 }
 
-                continue;
-            }
-
-            if (data_read == 0) {
-                break;
+                if (data_read == 0) {
+                    break;
+                } else {
+                    continue;
+                }
             }
 
             if (buf[0] < '0' or buf[0] > '9') {
@@ -136,7 +136,7 @@ pub const Races = struct {
         return races;
     }
 
-    fn fromData(distances: []u16, times: []u16, allocator: std.mem.Allocator) !Races {
+    fn fromData(distances: []usize, times: []usize, allocator: std.mem.Allocator) !Races {
         var race_list = std.ArrayList(Race).init(allocator);
         defer race_list.deinit();
 
@@ -150,11 +150,23 @@ pub const Races = struct {
                 .time = times[i],
             };
 
-            race_list.append(race);
+            try race_list.append(race);
         }
 
         const races = try race_list.toOwnedSlice();
 
         return Races{ .races = races, .allocator = allocator };
+    }
+
+    pub fn getAllHoldTimesSuperiorToDistance(self: Races) ![]usize {
+        var hold_times_list = std.ArrayList(usize).init(self.allocator);
+        defer hold_times_list.deinit();
+
+        for (self.races) |race| {
+            const hold_times = try race.getHeldTimesSuperiorToDistance(self.allocator);
+            try hold_times_list.append(hold_times.len);
+        }
+
+        return try hold_times_list.toOwnedSlice();
     }
 };
