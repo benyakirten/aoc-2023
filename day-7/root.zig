@@ -2,10 +2,13 @@ const std = @import("std");
 
 fn merge(comptime T: type, slice: []T, left_index: usize, middle_index: usize, right_index: usize, isBetter: fn (item: *T, other: *T) bool, allocator: std.mem.Allocator) !void {
     const left_size: usize = middle_index - left_index + 1;
-    const right_size: usize = middle_index + right_index;
+    const right_size: usize = right_index - middle_index;
 
     var left = try allocator.alloc(T, left_size);
+    defer allocator.free(left);
+
     var right = try allocator.alloc(T, right_size);
+    defer allocator.free(right);
 
     for (0..left_size) |idx| {
         left[idx] = slice[left_index + idx];

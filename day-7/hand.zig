@@ -13,12 +13,17 @@ pub const HandType = enum(u8) {
 
 const HAND_SIZE = 5;
 
+const HandCountValues = struct {
+    highest_count: usize,
+    second_highest_count: usize,
+};
+
 const HandCountError = error{HandSizeTooBig};
 const HandCount = struct {
     values: [HAND_SIZE]u8,
     counts: [HAND_SIZE]u8,
 
-    fn new(cards: [HAND_SIZE]Card) HandCount {
+    fn getTopTwo(cards: [HAND_SIZE]Card) HandCountValues {
         var hand_count = HandCount{
             .values = .{ 0, 0, 0, 0, 0 },
             .counts = .{ 0, 0, 0, 0, 0 },
@@ -27,9 +32,7 @@ const HandCount = struct {
             hand_count.insert(card.value);
         }
 
-        hand_count.sortByCount();
-
-        return hand_count;
+        return hand_count.getHighestCounts();
     }
 
     fn insert(self: *HandCount, value: u8) void {
@@ -47,42 +50,21 @@ const HandCount = struct {
         }
     }
 
-    fn sortByCount(self: *HandCount) void {
+    fn getHighestCounts(self: HandCount) HandCountValues {
         var highest_count: usize = 0;
-        var highest_count_index: usize = 0;
-
         var second_highest_count: usize = 0;
-        var second_highest_count_index: usize = 0;
 
-        for (self.*.counts, 0..) |count, i| {
+        for (self.counts) |count| {
             if (count > highest_count) {
                 if (highest_count > second_highest_count) {
                     second_highest_count = highest_count;
-                    second_highest_count_index = highest_count_index;
                 }
 
                 highest_count = count;
-                highest_count_index = i;
             }
         }
 
-        const swap_value_1 = self.values[0];
-        const swap_count_1 = self.counts[0];
-
-        const swap_value_2 = self.values[1];
-        const swap_count_2 = self.counts[1];
-
-        self.*.values[0] = self.values[highest_count_index];
-        self.*.values[highest_count_index] = swap_value_1;
-
-        self.*.counts[0] = self.counts[highest_count_index];
-        self.*.counts[highest_count_index] = swap_count_1;
-
-        self.*.values[1] = self.values[highest_count_index];
-        self.*.values[highest_count_index] = swap_value_2;
-
-        self.*.counts[1] = self.counts[highest_count_index];
-        self.*.counts[highest_count_index] = swap_count_2;
+        return HandCountValues{ .highest_count = highest_count, .second_highest_count = second_highest_count };
     }
 };
 
@@ -135,20 +117,20 @@ pub const Hand = struct {
             return self.*.value.?;
         }
 
-        const hand_count = HandCount.new(self.cards);
+        const hand_count = HandCount.getTopTwo(self.cards);
 
         var hand_type: HandType = undefined;
-        if (hand_count.counts[0] == 5) {
+        if (hand_count.highest_count == 5) {
             hand_type = HandType.FiveOAK;
-        } else if (hand_count.counts[0] == 4) {
+        } else if (hand_count.highest_count == 4) {
             hand_type = HandType.FourOAK;
-        } else if (hand_count.counts[0] == 3 and hand_count.counts[1] == 2) {
+        } else if (hand_count.highest_count == 3 and hand_count.second_highest_count == 2) {
             hand_type = HandType.FullHouse;
-        } else if (hand_count.counts[0] == 3) {
+        } else if (hand_count.highest_count == 3) {
             hand_type = HandType.ThreeOAK;
-        } else if (hand_count.counts[0] == 2 and hand_count.counts[1] == 2) {
+        } else if (hand_count.highest_count == 2 and hand_count.second_highest_count == 2) {
             hand_type = HandType.TwoPair;
-        } else if (hand_count.counts[0] == 2) {
+        } else if (hand_count.highest_count == 2) {
             hand_type = HandType.OnePair;
         } else {
             hand_type = HandType.HighCard;

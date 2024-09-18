@@ -9,15 +9,15 @@ pub fn main() !void {
 
     const allocator = arena.allocator();
 
-    const inputs = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    const inputs = try std.fs.cwd().openFile("puzzle_input.txt", .{ .mode = .read_only });
     defer inputs.close();
 
     const hands = try getHandsFromFile(inputs, allocator);
-    try root.mergeSort(Hand, hands, 0, hands.len, compFn, allocator);
+    try root.mergeSort(Hand, hands, 0, hands.len - 1, compFn, allocator);
 
     var total_value: usize = 0;
     for (hands, 0..) |hand, i| {
-        const value = hand.cards[0].value * (i + 1) * hand.bid;
+        const value = (i + 1) * hand.bid;
         total_value += value;
     }
 
@@ -64,11 +64,11 @@ fn getHandsFromFile(file: std.fs.File, allocator: std.mem.Allocator) ![]Hand {
         };
         try hand_list.append(hand_array);
 
+        var bid: u32 = 0;
         inner_loop: while (true) {
             letters_read = try file.read(bid_buf);
             const letter = bid_buf[0];
 
-            var bid: u32 = 0;
             if (letter == '\n' or letters_read == 0) {
                 try bid_list.append(bid);
 
