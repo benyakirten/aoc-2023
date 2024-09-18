@@ -2,13 +2,13 @@ const std = @import("std");
 
 // OAK means of a Kind
 pub const HandType = enum(u8) {
-    HighCard = 1,
-    OnePair = 2,
-    TwoPair = 3,
-    ThreeOAK = 4,
-    FullHouse = 5,
-    FourOAK = 6,
     FiveOAK = 7,
+    FourOAK = 6,
+    FullHouse = 5,
+    ThreeOAK = 4,
+    TwoPair = 3,
+    OnePair = 2,
+    HighCard = 1,
 };
 
 const HAND_SIZE = 5;
@@ -98,6 +98,46 @@ pub const Hand = struct {
     cards: [HAND_SIZE]Card,
     bid: u32,
     value: ?HandValue,
+
+    pub fn print(self: Hand) void {
+        std.debug.print("H: ", .{});
+        for (self.cards) |c| {
+            var val: u8 = undefined;
+            if (c.value >= 2 and c.value <= 9) {
+                val = c.value + '0';
+            } else {
+                switch (c.value) {
+                    14 => {
+                        val = 'A';
+                    },
+                    13 => {
+                        val = 'K';
+                    },
+                    12 => {
+                        val = 'Q';
+                    },
+                    11 => {
+                        val = 'J';
+                    },
+                    10 => {
+                        val = 'A';
+                    },
+                    else => {
+                        val = c.value;
+                    },
+                }
+            }
+
+            std.debug.print("{c}", .{val});
+        }
+
+        std.debug.print(" B: {}", .{self.bid});
+        if (self.value != null) {
+            std.debug.print(", T: {}\n", .{self.value.?.hand_type});
+        } else {
+            std.debug.print("\n", .{});
+        }
+    }
 
     pub fn new(values: [HAND_SIZE]u8, bid: u32) !Hand {
         var cards: [HAND_SIZE]Card = undefined;

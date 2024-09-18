@@ -13,12 +13,16 @@ pub fn main() !void {
     defer inputs.close();
 
     const hands = try getHandsFromFile(inputs, allocator);
+    defer allocator.free(hands);
+
     try root.mergeSort(Hand, hands, 0, hands.len - 1, compFn, allocator);
 
     var total_value: usize = 0;
     for (hands, 0..) |hand, i| {
+        hand.print();
         const value = (i + 1) * hand.bid;
         total_value += value;
+        std.debug.print("REP: {}, BID * REP: {}, NEW TOTAL: {}\n\n", .{ i + 1, value, total_value });
     }
 
     std.debug.print("Total bid value: {}\n", .{total_value});
