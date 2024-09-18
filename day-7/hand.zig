@@ -56,11 +56,10 @@ const HandCount = struct {
 
         for (self.counts) |count| {
             if (count > highest_count) {
-                if (highest_count > second_highest_count) {
-                    second_highest_count = highest_count;
-                }
-
+                second_highest_count = highest_count;
                 highest_count = count;
+            } else if (count > second_highest_count) {
+                second_highest_count = count;
             }
         }
 
@@ -100,7 +99,7 @@ pub const Hand = struct {
     value: ?HandValue,
 
     pub fn print(self: Hand) void {
-        std.debug.print("H: ", .{});
+        std.debug.print("('", .{});
         for (self.cards) |c| {
             var val: u8 = undefined;
             if (c.value >= 2 and c.value <= 9) {
@@ -120,7 +119,7 @@ pub const Hand = struct {
                         val = 'J';
                     },
                     10 => {
-                        val = 'A';
+                        val = 'T';
                     },
                     else => {
                         val = c.value;
@@ -131,7 +130,7 @@ pub const Hand = struct {
             std.debug.print("{c}", .{val});
         }
 
-        std.debug.print(" B: {}", .{self.bid});
+        std.debug.print("', '{}')\n", .{self.bid});
         if (self.value != null) {
             std.debug.print(", T: {}\n", .{self.value.?.hand_type});
         } else {
