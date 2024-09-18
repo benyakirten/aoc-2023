@@ -18,13 +18,13 @@ const HandCount = struct {
     values: [HAND_SIZE]u8,
     counts: [HAND_SIZE]u8,
 
-    fn new(cards: *[HAND_SIZE]Card) !HandCount {
-        const hand_count = HandCount{
+    fn new(cards: [HAND_SIZE]Card) HandCount {
+        var hand_count = HandCount{
             .values = .{ 0, 0, 0, 0, 0 },
             .counts = .{ 0, 0, 0, 0, 0 },
         };
         for (cards) |card| {
-            try hand_count.insert(card.*.value);
+            hand_count.insert(card.value);
         }
 
         hand_count.sortByCount();
@@ -32,31 +32,29 @@ const HandCount = struct {
         return hand_count;
     }
 
-    fn insert(self: HandCount, value: u8) !void {
+    fn insert(self: *HandCount, value: u8) void {
         for (0..HAND_SIZE) |i| {
-            if (self.values[i] == 0) {
-                self.values[i] = value;
-                self.counts[i] = 1;
+            if (self.*.values[i] == 0) {
+                self.*.values[i] = value;
+                self.*.counts[i] = 1;
                 return;
             }
 
-            if (self.values[i] == value) {
-                self.counts[i] += 1;
+            if (self.*.values[i] == value) {
+                self.*.counts[i] += 1;
                 return;
             }
         }
-
-        return HandCountError.HandSizeTooBig;
     }
 
-    fn sortByCount(self: HandCount) void {
-        var highest_count = 0;
-        var highest_count_index: u8 = 0;
+    fn sortByCount(self: *HandCount) void {
+        var highest_count: usize = 0;
+        var highest_count_index: usize = 0;
 
-        var second_highest_count = 0;
-        var second_highest_count_index = 0;
+        var second_highest_count: usize = 0;
+        var second_highest_count_index: usize = 0;
 
-        for (self.counts, 0..) |count, i| {
+        for (self.*.counts, 0..) |count, i| {
             if (count > highest_count) {
                 if (highest_count > second_highest_count) {
                     second_highest_count = highest_count;
@@ -74,34 +72,34 @@ const HandCount = struct {
         const swap_value_2 = self.values[1];
         const swap_count_2 = self.counts[1];
 
-        self.values[0] = self.values[highest_count_index];
-        self.values[highest_count_index] = swap_value_1;
+        self.*.values[0] = self.values[highest_count_index];
+        self.*.values[highest_count_index] = swap_value_1;
 
-        self.counts[0] = self.counts[highest_count_index];
-        self.counts[highest_count_index] = swap_count_1;
+        self.*.counts[0] = self.counts[highest_count_index];
+        self.*.counts[highest_count_index] = swap_count_1;
 
-        self.values[1] = self.values[highest_count_index];
-        self.values[highest_count_index] = swap_value_2;
+        self.*.values[1] = self.values[highest_count_index];
+        self.*.values[highest_count_index] = swap_value_2;
 
-        self.counts[1] = self.counts[highest_count_index];
-        self.counts[highest_count_index] = swap_count_2;
+        self.*.counts[1] = self.counts[highest_count_index];
+        self.*.counts[highest_count_index] = swap_count_2;
     }
 };
 
 pub const HandValue = struct {
-    cards: *[HAND_SIZE]Card,
+    cards: [HAND_SIZE]Card,
     hand_type: HandType,
 
     pub fn isGreater(self: HandValue, other: HandValue) bool {
-        if (self.hand_type > other.hand_type) {
+        if (@intFromEnum(self.hand_type) > @intFromEnum(other.hand_type)) {
             return true;
-        } else if (self.hand_type < other.hand_type) {
+        } else if (@intFromEnum(self.hand_type) < @intFromEnum(other.hand_type)) {
             return false;
         }
 
         for (0..HAND_SIZE) |i| {
-            const my_card = self.cards.*[i];
-            const other_card = other.cards.*[i];
+            const my_card = self.cards[i];
+            const other_card = other.cards[i];
 
             switch (my_card.Compare(other_card)) {
                 CardComparison.Greater => return true,
@@ -117,6 +115,7 @@ pub const HandValue = struct {
 pub const Hand = struct {
     cards: [HAND_SIZE]Card,
     bid: u32,
+    value: ?HandValue,
 
     pub fn new(values: [HAND_SIZE]u8, bid: u32) !Hand {
         var cards: [HAND_SIZE]Card = undefined;
@@ -126,13 +125,17 @@ pub const Hand = struct {
             cards[i] = try Card.new(value);
         }
 
-        const hand = Hand{ .bid = bid, .cards = cards };
+        const hand = Hand{ .bid = bid, .cards = cards, .value = null };
 
         return hand;
     }
 
-    pub fn determineHandValue(self: Hand) !HandValue {
-        const hand_count = try HandCount.new(&self.cards);
+    fn determineHandValue(self: *Hand) HandValue {
+        if (self.*.value != null) {
+            return self.*.value.?;
+        }
+
+        const hand_count = HandCount.new(self.cards);
 
         var hand_type: HandType = undefined;
         if (hand_count.counts[0] == 5) {
@@ -151,7 +154,16 @@ pub const Hand = struct {
             hand_type = HandType.HighCard;
         }
 
-        return HandValue{ .hand_type = hand_type, .cards = &self.cards };
+        const value = HandValue{ .hand_type = hand_type, .cards = self.cards };
+        self.*.value = value;
+
+        return value;
+    }
+
+    pub fn isBetter(self: *Hand, other: *Hand) bool {
+        const my_hand_value = self.determineHandValue();
+        const other_hand_value = other.determineHandValue();
+        return my_hand_value.isGreater(other_hand_value);
     }
 };
 
@@ -184,7 +196,7 @@ pub const Card = struct {
     pub fn Compare(self: Card, other: Card) CardComparison {
         if (self.value > other.value) {
             return CardComparison.Greater;
-        } else if (self.vlue < other.value) {
+        } else if (self.value < other.value) {
             return CardComparison.Lesser;
         } else {
             return CardComparison.Equal;

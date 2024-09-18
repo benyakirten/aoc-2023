@@ -1,5 +1,7 @@
 const std = @import("std");
-const hand = @import("hand.zig");
+
+const Hand = @import("hand.zig").Hand;
+const root = @import("root.zig");
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -10,7 +12,16 @@ pub fn main() !void {
     const inputs = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
     defer inputs.close();
 
-    _ = try getHandsFromFile(inputs, allocator);
+    const hands = try getHandsFromFile(inputs, allocator);
+    try root.mergeSort(Hand, hands, 0, hands.len, compFn, allocator);
+
+    var total_value: usize = 0;
+    for (hands, 0..) |hand, i| {
+        const value = hand.cards[0].value * (i + 1) * hand.bid;
+        total_value += value;
+    }
+
+    std.debug.print("Total bid value: {}\n", .{total_value});
 }
 
 const ReadError = error{
@@ -18,7 +29,7 @@ const ReadError = error{
     BidReadError,
     IncorrectSizeError,
 };
-fn getHandsFromFile(file: std.fs.File, allocator: std.mem.Allocator) ![]hand.Hand {
+fn getHandsFromFile(file: std.fs.File, allocator: std.mem.Allocator) ![]Hand {
     const hand_buf = try allocator.alloc(u8, 5);
     defer allocator.free(hand_buf);
 
@@ -83,11 +94,11 @@ fn getHandsFromFile(file: std.fs.File, allocator: std.mem.Allocator) ![]hand.Han
         return ReadError.IncorrectSizeError;
     }
 
-    var hand_items = try std.ArrayList(hand.Hand).initCapacity(allocator, hands.len);
+    var hand_items = try std.ArrayList(Hand).initCapacity(allocator, hands.len);
     defer hand_items.deinit();
 
     for (0..hands.len) |i| {
-        const hand_item = try hand.Hand.new(hands[i], bids[i]);
+        const hand_item = try Hand.new(hands[i], bids[i]);
         try hand_items.append(hand_item);
     }
 
@@ -95,4 +106,8 @@ fn getHandsFromFile(file: std.fs.File, allocator: std.mem.Allocator) ![]hand.Han
     hand_items.clearAndFree();
 
     return all_hands;
+}
+
+fn compFn(a: *Hand, b: *Hand) bool {
+    return a.isBetter(b);
 }
