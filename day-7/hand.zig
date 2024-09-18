@@ -151,6 +151,19 @@ pub const Hand = struct {
         return hand;
     }
 
+    pub fn newWithJokers(values: [HAND_SIZE]u8, bid: u32) !Hand {
+        var cards: [HAND_SIZE]Card = undefined;
+
+        for (0..HAND_SIZE) |i| {
+            const value = values[i];
+            cards[i] = try Card.newWithJokers(value);
+        }
+
+        const hand = Hand{ .bid = bid, .cards = cards, .value = null };
+
+        return hand;
+    }
+
     fn determineHandValue(self: *Hand) HandValue {
         if (self.*.value != null) {
             return self.*.value.?;
@@ -209,6 +222,21 @@ pub const Card = struct {
             'K' => return Card{ .value = 13 },
             'Q' => return Card{ .value = 12 },
             'J' => return Card{ .value = 11 },
+            'T' => return Card{ .value = 10 },
+            else => return CardError.InvalidValue,
+        }
+    }
+
+    pub fn newWithJokers(value: u8) !Card {
+        if (value >= '2' and value <= '9') {
+            return Card{ .value = value - '0' };
+        }
+
+        switch (value) {
+            'A' => return Card{ .value = 14 },
+            'K' => return Card{ .value = 13 },
+            'Q' => return Card{ .value = 12 },
+            'J' => return Card{ .value = 1 },
             'T' => return Card{ .value = 10 },
             else => return CardError.InvalidValue,
         }
