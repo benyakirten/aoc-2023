@@ -11,11 +11,24 @@ pub const HandType = enum(u8) {
     HighCard = 1,
 };
 
-const HAND_SIZE = 5;
+pub const JOKER_SPECIAL_VALUE: u8 = 1;
+pub const JOKER_NORMAL_VALUE = 11;
+pub const ACE_VALUE: u8 = 14;
+pub const KING_VALUE: u8 = 13;
+pub const QUEEN_VALUE: u8 = 12;
+pub const TEN_VALUE: u8 = 10;
+
+pub const HAND_SIZE = 5;
 
 const HandCountValues = struct {
     highest_count: usize,
     second_highest_count: usize,
+};
+
+const HandCountValuesWithJokers = struct {
+    highest_count: usize,
+    second_highest_count: usize,
+    num_jokers: usize,
 };
 
 const HandCountError = error{HandSizeTooBig};
@@ -65,6 +78,58 @@ const HandCount = struct {
 
         return HandCountValues{ .highest_count = highest_count, .second_highest_count = second_highest_count };
     }
+
+    fn getTopTwoWithJokers(cards: [HAND_SIZE]Card) HandCountValuesWithJokers {
+        var hand_count = HandCount{
+            .values = .{ 0, 0, 0, 0, 0 },
+            .counts = .{ 0, 0, 0, 0, 0 },
+        };
+        for (cards) |card| {
+            hand_count.insert(card.value);
+        }
+
+        return hand_count.getHighestCountsWithJokers(cards);
+    }
+
+    fn getHighestCountsWithJokers(self: HandCount, cards: [HAND_SIZE]Card) HandCountValuesWithJokers {
+        var num_jokers: u8 = 0;
+        for (cards) |card| {
+            if (card.value == JOKER_SPECIAL_VALUE) {
+                num_jokers += 1;
+            }
+        }
+        // std.debug.print("{}: ", .{num_jokers});
+        // for (cards) |card| {
+        //     std.debug.print("{} ", .{card.value});
+        // }
+        // std.debug.print("\n", .{});
+
+        var highest_count: usize = 0;
+        var highest_count_index: usize = 0;
+
+        var second_highest_count: usize = 0;
+        var second_highest_count_index: usize = 0;
+
+        for (self.counts, 0..) |count, i| {
+            if (count > highest_count) {
+                second_highest_count = highest_count;
+                second_highest_count_index = highest_count_index;
+
+                highest_count = count;
+                highest_count_index = i;
+            } else if (count > second_highest_count) {
+                second_highest_count = count;
+                second_highest_count_index = i;
+            }
+        }
+
+        const hcv_with_jokers = HandCountValuesWithJokers{
+            .highest_count = highest_count,
+            .second_highest_count = second_highest_count,
+            .num_jokers = num_jokers,
+        };
+        return hcv_with_jokers;
+    }
 };
 
 pub const HandValue = struct {
@@ -93,6 +158,7 @@ pub const HandValue = struct {
     }
 };
 
+pub const HandError = error{CardError};
 pub const Hand = struct {
     cards: [HAND_SIZE]Card,
     bid: u32,
@@ -115,7 +181,7 @@ pub const Hand = struct {
                     12 => {
                         val = 'Q';
                     },
-                    11 => {
+                    1 => {
                         val = 'J';
                     },
                     10 => {
@@ -130,7 +196,7 @@ pub const Hand = struct {
             std.debug.print("{c}", .{val});
         }
 
-        std.debug.print("', '{}')\n", .{self.bid});
+        std.debug.print("', '{}')", .{self.bid});
         if (self.value != null) {
             std.debug.print(", T: {}\n", .{self.value.?.hand_type});
         } else {
@@ -138,12 +204,14 @@ pub const Hand = struct {
         }
     }
 
-    pub fn new(values: [HAND_SIZE]u8, bid: u32) !Hand {
+    pub fn new(values: [HAND_SIZE]u8, bid: u32) HandError!Hand {
         var cards: [HAND_SIZE]Card = undefined;
 
         for (0..HAND_SIZE) |i| {
             const value = values[i];
-            cards[i] = try Card.new(value);
+            cards[i] = Card.new(value) catch {
+                return HandError.CardError;
+            };
         }
 
         const hand = Hand{ .bid = bid, .cards = cards, .value = null };
@@ -151,14 +219,15 @@ pub const Hand = struct {
         return hand;
     }
 
-    pub fn newWithJokers(values: [HAND_SIZE]u8, bid: u32) !Hand {
+    pub fn newWithJokers(values: [HAND_SIZE]u8, bid: u32) HandError!Hand {
         var cards: [HAND_SIZE]Card = undefined;
 
         for (0..HAND_SIZE) |i| {
             const value = values[i];
-            cards[i] = try Card.newWithJokers(value);
+            cards[i] = Card.newWithJokers(value) catch {
+                return HandError.CardError;
+            };
         }
-
         const hand = Hand{ .bid = bid, .cards = cards, .value = null };
 
         return hand;
@@ -170,23 +239,7 @@ pub const Hand = struct {
         }
 
         const hand_count = HandCount.getTopTwo(self.cards);
-
-        var hand_type: HandType = undefined;
-        if (hand_count.highest_count == 5) {
-            hand_type = HandType.FiveOAK;
-        } else if (hand_count.highest_count == 4) {
-            hand_type = HandType.FourOAK;
-        } else if (hand_count.highest_count == 3 and hand_count.second_highest_count == 2) {
-            hand_type = HandType.FullHouse;
-        } else if (hand_count.highest_count == 3) {
-            hand_type = HandType.ThreeOAK;
-        } else if (hand_count.highest_count == 2 and hand_count.second_highest_count == 2) {
-            hand_type = HandType.TwoPair;
-        } else if (hand_count.highest_count == 2) {
-            hand_type = HandType.OnePair;
-        } else {
-            hand_type = HandType.HighCard;
-        }
+        const hand_type = determineHandType(hand_count);
 
         const value = HandValue{ .hand_type = hand_type, .cards = self.cards };
         self.*.value = value;
@@ -194,9 +247,117 @@ pub const Hand = struct {
         return value;
     }
 
+    fn determineHandType(hcv: HandCountValues) HandType {
+        if (hcv.highest_count == 5) {
+            return HandType.FiveOAK;
+        } else if (hcv.highest_count == 4) {
+            return HandType.FourOAK;
+        } else if (hcv.highest_count == 3 and hcv.second_highest_count == 2) {
+            return HandType.FullHouse;
+        } else if (hcv.highest_count == 3) {
+            return HandType.ThreeOAK;
+        } else if (hcv.highest_count == 2 and hcv.second_highest_count == 2) {
+            return HandType.TwoPair;
+        } else if (hcv.highest_count == 2) {
+            return HandType.OnePair;
+        } else {
+            return HandType.HighCard;
+        }
+    }
+
+    fn determineHandValueWithJokers(self: *Hand) HandValue {
+        if (self.*.value != null) {
+            return self.*.value.?;
+        }
+
+        const hand_count = HandCount.getTopTwoWithJokers(self.cards);
+        const hand_type: HandType = determineHandTypeWithJokers(hand_count);
+
+        const value = HandValue{ .hand_type = hand_type, .cards = self.cards };
+        self.*.value = value;
+
+        return value;
+    }
+
+    fn determineHandTypeWithJokers(hcv: HandCountValuesWithJokers) HandType {
+        //  Five of a kind
+        if (hcv.highest_count == 5) {
+            return HandType.FiveOAK;
+        }
+
+        // Four of a kind
+        if (hcv.highest_count == 4) {
+            // AAAAJ
+            if (hcv.num_jokers > 0) {
+                return HandType.FiveOAK;
+            } else {
+                return HandType.FourOAK;
+            }
+        }
+
+        // Full house
+        if (hcv.highest_count == 3 and hcv.second_highest_count == 2) {
+            // If we have any jokers they must be either highest or second count
+            // So they can all wildcard into the other slot
+            if (hcv.num_jokers > 0) {
+                return HandType.FiveOAK;
+            } else {
+                return HandType.FullHouse;
+            }
+        }
+
+        // Three of a kind
+        if (hcv.highest_count == 3) {
+            if (hcv.num_jokers == 0) {
+                // 777AQ
+                return HandType.ThreeOAK;
+            } else {
+                // We cannot have two jokers because that would get caught by full house above
+                // Therefore we either have JJJQA (three jokers) or QQQJA (one joker), which
+                // both result in four of a kind.
+                return HandType.FourOAK;
+            }
+        }
+
+        // Two pair
+        if (hcv.highest_count == 2 and hcv.second_highest_count == 2) {
+            if (hcv.num_jokers == 0) {
+                return HandType.TwoPair;
+            } else if (hcv.num_jokers == 1) {
+                return HandType.FullHouse;
+            } else {
+                return HandType.FourOAK;
+            }
+        }
+
+        // One pair
+        if (hcv.highest_count == 2) {
+            if (hcv.num_jokers == 0) {
+                // AAQ7K
+                return HandType.OnePair;
+            } else {
+                // AAQ7J
+                return HandType.ThreeOAK;
+            }
+        }
+
+        if (hcv.num_jokers > 0) {
+            // 1234J
+            return HandType.OnePair;
+        }
+
+        return HandType.HighCard;
+    }
+
     pub fn isBetter(self: *Hand, other: *Hand) bool {
         const my_hand_value = self.determineHandValue();
         const other_hand_value = other.determineHandValue();
+        return my_hand_value.isGreater(other_hand_value);
+    }
+
+    pub fn isBetterWithJokers(self: *Hand, other: *Hand) bool {
+        const my_hand_value = self.determineHandValueWithJokers();
+        const other_hand_value = other.determineHandValueWithJokers();
         return my_hand_value.isGreater(other_hand_value);
     }
 };
@@ -218,11 +379,11 @@ pub const Card = struct {
         }
 
         switch (value) {
-            'A' => return Card{ .value = 14 },
-            'K' => return Card{ .value = 13 },
-            'Q' => return Card{ .value = 12 },
-            'J' => return Card{ .value = 11 },
-            'T' => return Card{ .value = 10 },
+            'A' => return Card{ .value = ACE_VALUE },
+            'K' => return Card{ .value = KING_VALUE },
+            'Q' => return Card{ .value = QUEEN_VALUE },
+            'J' => return Card{ .value = JOKER_NORMAL_VALUE },
+            'T' => return Card{ .value = TEN_VALUE },
             else => return CardError.InvalidValue,
         }
     }
@@ -233,11 +394,11 @@ pub const Card = struct {
         }
 
         switch (value) {
-            'A' => return Card{ .value = 14 },
-            'K' => return Card{ .value = 13 },
-            'Q' => return Card{ .value = 12 },
-            'J' => return Card{ .value = 1 },
-            'T' => return Card{ .value = 10 },
+            'A' => return Card{ .value = ACE_VALUE },
+            'K' => return Card{ .value = KING_VALUE },
+            'Q' => return Card{ .value = QUEEN_VALUE },
+            'J' => return Card{ .value = JOKER_SPECIAL_VALUE },
+            'T' => return Card{ .value = TEN_VALUE },
             else => return CardError.InvalidValue,
         }
     }

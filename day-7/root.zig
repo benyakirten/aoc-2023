@@ -1,6 +1,8 @@
 const std = @import("std");
 
 const Hand = @import("hand.zig").Hand;
+const HAND_SIZE = @import("hand.zig").HAND_SIZE;
+const HandError = @import("hand.zig").HandError;
 
 fn merge(comptime T: type, slice: []T, left_index: usize, middle_index: usize, right_index: usize, isBetter: fn (item: *T, other: *T) bool, allocator: std.mem.Allocator) !void {
     const left_size: usize = middle_index - left_index + 1;
@@ -150,7 +152,7 @@ fn getHandDataFromFile(file: std.fs.File, allocator: std.mem.Allocator) ![]HandD
     return hand_data;
 }
 
-pub fn getHandsFromFile(file: std.fs.File, allocator: std.mem.Allocator) ![]Hand {
+pub fn getHandsFromFile(file: std.fs.File, allocator: std.mem.Allocator, newHandFn: fn (values: [HAND_SIZE]u8, bid: u32) HandError!Hand) ![]Hand {
     const hand_data = try getHandDataFromFile(file, allocator);
     defer allocator.free(hand_data);
 
@@ -158,7 +160,7 @@ pub fn getHandsFromFile(file: std.fs.File, allocator: std.mem.Allocator) ![]Hand
     defer hand_items.deinit();
 
     for (hand_data) |datum| {
-        const hand_item = try Hand.new(datum.hand, datum.bid);
+        const hand_item = try newHandFn(datum.hand, datum.bid);
         try hand_items.append(hand_item);
     }
 
