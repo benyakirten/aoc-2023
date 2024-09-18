@@ -116,14 +116,17 @@ pub const HandValue = struct {
 
 pub const Hand = struct {
     cards: [HAND_SIZE]Card,
-    allocator: std.mem.Allocator,
+    bid: u32,
 
-    pub fn new(values: [HAND_SIZE]u8) !Hand {
-        const hand = Hand{};
+    pub fn new(values: [HAND_SIZE]u8, bid: u32) !Hand {
+        var cards: [HAND_SIZE]Card = undefined;
+
         for (0..HAND_SIZE) |i| {
             const value = values[i];
-            hand.cards[i] = try Card.new(value);
+            cards[i] = try Card.new(value);
         }
+
+        const hand = Hand{ .bid = bid, .cards = cards };
 
         return hand;
     }
@@ -167,11 +170,13 @@ pub const Card = struct {
         if (value >= '2' and value <= '9') {
             return Card{ .value = value - '0' };
         }
+
         switch (value) {
-            'A' => return Card{ .value = 13 },
-            'K' => return Card{ .value = 12 },
-            'Q' => return Card{ .value = 11 },
-            'J' => return Card{ .value = 10 },
+            'A' => return Card{ .value = 14 },
+            'K' => return Card{ .value = 13 },
+            'Q' => return Card{ .value = 12 },
+            'J' => return Card{ .value = 11 },
+            'T' => return Card{ .value = 10 },
             else => return CardError.InvalidValue,
         }
     }
