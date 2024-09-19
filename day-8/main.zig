@@ -59,8 +59,7 @@ pub fn parseToMapState(file: std.fs.File, allocator: std.mem.Allocator) !map.Map
         return map.InstructionsError.ParsingError;
     }
 
-    while (true) {
-        const letters_read = try file.read(location_buf);
+    while (try file.read(location_buf) != 0) {
         try validate_location_line(location_buf);
 
         const location_name = map.MapItemName{ location_buf[0], location_buf[1], location_buf[2] };
@@ -71,11 +70,8 @@ pub fn parseToMapState(file: std.fs.File, allocator: std.mem.Allocator) !map.Map
 
         const right = map.MapItemName{ location_buf[12], location_buf[13], location_buf[14] };
         try right_list.append(right);
-
-        if (letters_read != 17) {
-            break;
-        }
     }
+
     const instructions = try instructions_list.toOwnedSlice();
     const location_names = try location_name_list.toOwnedSlice();
     const lefts = try left_list.toOwnedSlice();
