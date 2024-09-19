@@ -16,7 +16,7 @@ pub const MapState = struct {
     map: Map,
     allocator: std.mem.Allocator,
 
-    pub fn deinit(self: MapState) void {
+    pub fn deinit(self: *MapState) void {
         self.allocator.free(self.instructions.instructions);
         self.map.map.deinit();
     }
@@ -43,12 +43,12 @@ pub const MapState = struct {
     }
 
     pub fn advanceToEnd(self: *MapState) !void {
-        while (self.advance()) {}
+        while (try self.advance()) {}
     }
 
     /// Returns whether the map state can continue or not
     pub fn advance(self: *MapState) !bool {
-        if (std.mem.eql(u8, self.current_location, "ZZZ")) {
+        if (std.mem.eql(u8, &self.current_location, "ZZZ")) {
             return false;
         }
 
@@ -59,9 +59,9 @@ pub const MapState = struct {
         self.current_instruction_index = (self.current_instruction_index + 1) % self.instructions.length();
         self.current_location = next_location;
 
-        if (std.mem.eql(u8, self.current_location, "ZZZ")) {
-            return false;
-        }
+        std.debug.print("{} steps - instruction {}: {any} to {s}\n", .{ self.steps_taken, self.current_instruction_index, instruction, next_location });
+
+        return true;
     }
 };
 
@@ -86,7 +86,7 @@ pub const Instructions = struct {
     }
 
     pub fn parse(input: []u8, allocator: std.mem.Allocator) InstructionsError!Instructions {
-        const instructions_list = std.ArrayList(Instruction).initCapacity(allocator, input.len) catch {
+        var instructions_list = std.ArrayList(Instruction).initCapacity(allocator, input.len) catch {
             return InstructionsError.AllocationError;
         };
         defer instructions_list.deinit();
@@ -116,7 +116,7 @@ pub const Map = struct {
     map: std.AutoHashMap(MapItemName, MapItem),
 
     pub fn new(allocator: std.mem.Allocator) Map {
-        return Map{ .map = std.AutoHashMap(MapItemName, MapItem).init(allocator), .allocator = allocator };
+        return Map{ .map = std.AutoHashMap(MapItemName, MapItem).init(allocator) };
     }
 
     pub fn insert(self: *Map, key: MapItemName, left: MapItemName, right: MapItemName) !void {

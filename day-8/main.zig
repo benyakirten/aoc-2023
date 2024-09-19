@@ -14,9 +14,9 @@ pub fn main() !void {
     var map_state = try parseToMapState(inputs, allocator);
     defer map_state.deinit();
 
-    map_state.advanceToEnd();
+    try map_state.advanceToEnd();
 
-    std.debug.print("It took {} steps to reach ZZZ", .{map_state.steps_taken});
+    std.debug.print("It took {} steps to reach ZZZ\n", .{map_state.steps_taken});
 }
 
 pub fn parseToMapState(file: std.fs.File, allocator: std.mem.Allocator) !map.MapState {
@@ -39,9 +39,7 @@ pub fn parseToMapState(file: std.fs.File, allocator: std.mem.Allocator) !map.Map
     var instructions_list = std.ArrayList(u8).init(allocator);
     defer instructions_list.deinit();
 
-    while (true) {
-        try file.read(buf);
-
+    while (try file.read(buf) != 0) {
         const letter = buf[0];
         if (letter == '\n') {
             break;
@@ -54,14 +52,12 @@ pub fn parseToMapState(file: std.fs.File, allocator: std.mem.Allocator) !map.Map
         }
     }
 
-    try file.read(buf);
+    _ = try file.read(buf);
     if (buf[0] != '\n') {
         return map.InstructionsError.ParsingError;
     }
 
     while (try file.read(location_buf) != 0) {
-        try validate_location_line(location_buf);
-
         const location_name = map.MapItemName{ location_buf[0], location_buf[1], location_buf[2] };
         try location_name_list.append(location_name);
 
@@ -73,49 +69,16 @@ pub fn parseToMapState(file: std.fs.File, allocator: std.mem.Allocator) !map.Map
     }
 
     const instructions = try instructions_list.toOwnedSlice();
+    defer allocator.free(instructions);
+
     const location_names = try location_name_list.toOwnedSlice();
+    defer allocator.free(location_names);
+
     const lefts = try left_list.toOwnedSlice();
+    defer allocator.free(lefts);
+
     const rights = try right_list.toOwnedSlice();
+    defer allocator.free(rights);
 
     return try map.MapState.new(instructions, location_names, lefts, rights, allocator);
-}
-
-fn validate_location_line(buf: []u8) map.InstructionsError!void {
-    if (buf.len != 16 and buf.len != 17) {
-        return map.InstructionsError.ParsingError;
-    }
-
-    for (0..3) |i| {
-        if (!validate_letter(buf[i])) {
-            return map.InstructionsError.ParsingError;
-        }
-    }
-
-    if (!std.mem.eql(u8, buf[3..7], " _ (")) {
-        return map.InstructionsError.ParsingError;
-    }
-
-    for (7..10) |i| {
-        if (!validate_letter(buf[i])) {
-            return map.InstructionsError.ParsingError;
-        }
-    }
-
-    if (!std.mem.eql(u8, buf[10..12], ", ")) {
-        return map.InstructionsError.ParsingError;
-    }
-
-    for (12..15) |i| {
-        if (!validate_letter(buf[i])) {
-            return map.InstructionsError.ParsingError;
-        }
-    }
-
-    if (buf[16] != ')') {
-        return map.InstructionsError.ParsingError;
-    }
-}
-
-fn validate_letter(letter: u8) bool {
-    return letter < 'A' or letter > 'Z';
 }
