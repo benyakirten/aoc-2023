@@ -11,15 +11,33 @@ pub fn main() !void {
     const inputs = try std.fs.cwd().openFile("puzzle_input.txt", .{ .mode = .read_only });
     defer inputs.close();
 
-    var map_state = try parseToMapState(inputs, allocator);
-    defer map_state.deinit();
+    var linear_map_state = try parseToMapState(map.MapState, inputs, allocator, map.MapState.new);
+    defer linear_map_state.deinit();
 
-    try map_state.advanceToEnd();
+    try linear_map_state.advanceToEnd();
 
-    std.debug.print("It took {} steps to reach ZZZ\n", .{map_state.steps_taken});
+    std.debug.print("It took {} steps to reach ZZZ linearly\n", .{linear_map_state.steps_taken});
+
+    var parallel_map_state = try parseToMapState(map.ParallelMapStateManager, inputs, allocator, map.ParallelMapStateManager.new);
+    defer parallel_map_state.deinit();
+
+    try parallel_map_state.advanceToEnd();
+
+    std.debug.print("It took {} steps to reach ZZZ parallel...ly\n", .{parallel_map_state.steps_taken});
 }
 
-pub fn parseToMapState(file: std.fs.File, allocator: std.mem.Allocator) !map.MapState {
+pub fn parseToMapState(
+    comptime T: type,
+    file: std.fs.File,
+    allocator: std.mem.Allocator,
+    newFn: fn (
+        instructions: []u8,
+        keys: []map.MapItemName,
+        lefts: []map.MapItemName,
+        rights: []map.MapItemName,
+        allocator: std.mem.Allocator,
+    ) map.MapStateError!T,
+) !T {
     const buf = try allocator.alloc(u8, 1);
     defer allocator.free(buf);
 
@@ -80,5 +98,11 @@ pub fn parseToMapState(file: std.fs.File, allocator: std.mem.Allocator) !map.Map
     const rights = try right_list.toOwnedSlice();
     defer allocator.free(rights);
 
-    return try map.MapState.new(instructions, location_names, lefts, rights, allocator);
+    return try newFn(
+        instructions,
+        location_names,
+        lefts,
+        rights,
+        allocator,
+    );
 }
