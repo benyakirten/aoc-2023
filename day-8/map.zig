@@ -35,7 +35,7 @@ pub const MapState = struct {
         return MapState{
             .map = map,
             .instructions = parsed_instructions,
-            .current_location = keys[0],
+            .current_location = MapItemName{ 'A', 'A', 'A' },
             .steps_taken = 0,
             .current_instruction_index = 0,
             .allocator = allocator,
