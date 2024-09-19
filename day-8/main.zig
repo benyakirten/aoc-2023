@@ -18,6 +18,8 @@ pub fn main() !void {
 
     std.debug.print("It took {} steps to reach ZZZ linearly\n", .{linear_map_state.steps_taken});
 
+    try inputs.seekTo(0);
+
     var parallel_map_state = try parseToMapState(map.ParallelMapStateManager, inputs, allocator, map.ParallelMapStateManager.new);
     defer parallel_map_state.deinit();
 
