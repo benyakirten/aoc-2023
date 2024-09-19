@@ -108,3 +108,20 @@ pub fn parseToMapState(
         allocator,
     );
 }
+
+test "main functionaltiy does not leak memory" {
+    const inputs = try std.fs.cwd().openFile("puzzle_input.txt", .{ .mode = .read_only });
+    defer inputs.close();
+
+    var linear_map_state = try parseToMapState(map.MapState, inputs, std.testing.allocator, map.MapState.new);
+    defer linear_map_state.deinit();
+
+    try linear_map_state.advanceToEnd();
+
+    try inputs.seekTo(0);
+
+    var parallel_map_state = try parseToMapState(map.ParallelMapStateManager, inputs, std.testing.allocator, map.ParallelMapStateManager.new);
+    defer parallel_map_state.deinit();
+
+    _ = try parallel_map_state.run();
+}

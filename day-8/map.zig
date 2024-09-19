@@ -172,6 +172,7 @@ pub const ParallelMapStateManager = struct {
 
     pub fn deinit(self: *ParallelMapStateManager) void {
         self.allocator.free(self.instructions.instructions);
+        self.allocator.free(self.map_states);
         self.map.map.deinit();
     }
 
