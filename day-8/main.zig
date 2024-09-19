@@ -23,9 +23,9 @@ pub fn main() !void {
     var parallel_map_state = try parseToMapState(map.ParallelMapStateManager, inputs, allocator, map.ParallelMapStateManager.new);
     defer parallel_map_state.deinit();
 
-    try parallel_map_state.advanceToEnd();
+    const steps = try parallel_map_state.run();
 
-    std.debug.print("It took {} steps to reach ZZZ parallel...ly\n", .{parallel_map_state.steps_taken});
+    std.debug.print("It took {} steps to reach ZZZ parallel...ly\n", .{steps});
 }
 
 pub fn parseToMapState(
