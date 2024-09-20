@@ -58,15 +58,22 @@ fn processSequence(data: []u8, allocator: std.mem.Allocator) ![]isize {
     defer items.deinit();
 
     var item: isize = 0;
+    var is_negative: bool = false;
     for (data, 0..) |datum, i| {
-        if (datum == ' ') {
+        if (datum == ' ' or i == data.len - 1) {
+            if (i == data.len - 1) {
+                item = item * 10 + datum - '0';
+            }
+
+            if (is_negative) {
+                item *= -1;
+            }
+
             try items.append(item);
             item = 0;
+            is_negative = false;
         } else if (datum == '-') {
-            item *= -1;
-        } else if (i == data.len - 1) {
-            item = item * 10 + datum - '0';
-            try items.append(item);
+            is_negative = true;
         } else {
             item = item * 10 + datum - '0';
         }

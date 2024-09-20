@@ -12,10 +12,10 @@ pub const Sequence = struct {
 
     pub fn getNext(self: Sequence) SequenceError!isize {
         const last_item = self.data[self.data.len - 1];
-        return last_item + try deriveNextItem(self.data, self.allocator);
+        return last_item + try deriveNextItem(self.data, self.allocator, 0);
     }
 
-    fn deriveNextItem(sequence: []isize, allocator: std.mem.Allocator) SequenceError!isize {
+    fn deriveNextItem(sequence: []isize, allocator: std.mem.Allocator, iter: usize) SequenceError!isize {
         if (sequence.len == 0) {
             return SequenceError.DerivationError;
         }
@@ -35,6 +35,6 @@ pub const Sequence = struct {
             return 0;
         }
 
-        return derived_sequence[derived_sequence.len - 1] + try deriveNextItem(derived_sequence, allocator);
+        return derived_sequence[derived_sequence.len - 1] + try deriveNextItem(derived_sequence, allocator, iter + 1);
     }
 };
