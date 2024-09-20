@@ -45,6 +45,8 @@ fn readSequences(file: std.fs.File, allocator: std.mem.Allocator) ![]Sequence {
             raw_sequence.clearAndFree();
 
             const seq = try processSequence(data, allocator);
+            allocator.free(data);
+
             const sequence = Sequence{ .allocator = allocator, .data = seq };
             try sequence_list.append(sequence);
 
@@ -86,4 +88,21 @@ fn processSequence(data: []u8, allocator: std.mem.Allocator) ![]isize {
     }
 
     return try items.toOwnedSlice();
+}
+
+test "main functionality doesn't leak memory" {
+    const inputs = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer inputs.close();
+
+    const sequences = try readSequences(inputs, std.testing.allocator);
+    defer std.testing.allocator.free(sequences);
+
+    var next_total: isize = 0;
+    var previous_total: isize = 0;
+
+    for (sequences) |sequence| {
+        next_total += try sequence.getNext();
+        previous_total += try sequence.getPrevious();
+        sequence.deinit();
+    }
 }
