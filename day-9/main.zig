@@ -12,7 +12,7 @@ pub fn main() !void {
     defer inputs.close();
 
     const sequences = try readSequences(inputs, allocator);
-    var total: usize = 0;
+    var total: isize = 0;
 
     for (sequences) |sequence| {
         total += try sequence.getNext();
@@ -22,7 +22,7 @@ pub fn main() !void {
 }
 
 fn readSequences(file: std.fs.File, allocator: std.mem.Allocator) ![]Sequence {
-    var sequence_list = std.ArrayList([]usize).init(allocator);
+    var sequence_list = std.ArrayList([]isize).init(allocator);
     defer sequence_list.deinit();
 
     var sequence = std.ArrayList(u8).init(allocator);
@@ -59,15 +59,17 @@ fn readSequences(file: std.fs.File, allocator: std.mem.Allocator) ![]Sequence {
     return try sequence_list.toOwnedSlice();
 }
 
-fn processSequence(data: []u8, allocator: std.mem.Allocator) []usize {
-    const items = std.ArrayList(usize).init(allocator);
+fn processSequence(data: []u8, allocator: std.mem.Allocator) []isize {
+    const items = std.ArrayList(isize).init(allocator);
     defer items.deinit();
 
-    var item: usize = 0;
+    var item: isize = 0;
     for (data, 0..) |datum, i| {
         if (i == data.len - 1 or datum == ' ') {
             try items.append(item);
             item = 0;
+        } else if (datum == '-') {
+            item *= -1;
         } else {
             item = item * 10 + datum - '0';
         }

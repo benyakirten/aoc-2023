@@ -3,25 +3,25 @@ const std = @import("std");
 pub const SequenceError = error{ AllocationError, DerivationError };
 
 pub const Sequence = struct {
-    data: []usize,
+    data: []isize,
     allocator: std.mem.Allocator,
 
     pub fn deinit(self: Sequence) void {
         self.allocator.free(self.data);
     }
 
-    pub fn getNext(self: Sequence) SequenceError!usize {
+    pub fn getNext(self: Sequence) SequenceError!isize {
         const last_item = self.data[self.data.len - 1];
         return last_item + try deriveNextItem(self.data, self.allocator);
     }
 
-    fn deriveNextItem(sequence: []usize, allocator: std.mem.Allocator) SequenceError!usize {
+    fn deriveNextItem(sequence: []isize, allocator: std.mem.Allocator) SequenceError!isize {
         if (sequence.len == 0) {
             return SequenceError.DerivationError;
         }
 
         var derived_to_nothing = true;
-        var derived_sequence = allocator.alloc(usize, sequence.len - 1) catch {
+        var derived_sequence = allocator.alloc(isize, sequence.len - 1) catch {
             return SequenceError.AllocationError;
         };
 
