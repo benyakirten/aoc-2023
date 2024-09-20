@@ -59,11 +59,14 @@ fn processSequence(data: []u8, allocator: std.mem.Allocator) ![]isize {
 
     var item: isize = 0;
     for (data, 0..) |datum, i| {
-        if (i == data.len - 1 or datum == ' ') {
+        if (datum == ' ') {
             try items.append(item);
             item = 0;
         } else if (datum == '-') {
             item *= -1;
+        } else if (i == data.len - 1) {
+            item = item * 10 + datum - '0';
+            try items.append(item);
         } else {
             item = item * 10 + datum - '0';
         }

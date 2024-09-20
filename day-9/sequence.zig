@@ -20,12 +20,12 @@ pub const Sequence = struct {
             return SequenceError.DerivationError;
         }
 
-        var derived_to_nothing = true;
         var derived_sequence = allocator.alloc(isize, sequence.len - 1) catch {
             return SequenceError.AllocationError;
         };
 
-        for (0..sequence.len - 2) |i| {
+        var derived_to_nothing = true;
+        for (0..sequence.len - 1) |i| {
             const delta: isize = sequence[i + 1] - sequence[i];
             derived_sequence[i] = delta;
             derived_to_nothing = derived_to_nothing and delta == 0;
