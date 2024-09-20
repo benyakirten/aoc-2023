@@ -37,4 +37,16 @@ pub const Sequence = struct {
 
         return derived_sequence[derived_sequence.len - 1] + try deriveNextItem(derived_sequence, allocator, iter + 1);
     }
+
+    pub fn getPrevious(self: Sequence) SequenceError!isize {
+        const reversed_arr = self.allocator.alloc(isize, self.data.len) catch {
+            return SequenceError.AllocationError;
+        };
+        for (0..self.data.len) |i| {
+            reversed_arr[i] = self.data[self.data.len - 1 - i];
+        }
+
+        const last_item = reversed_arr[reversed_arr.len - 1];
+        return last_item + try deriveNextItem(reversed_arr, self.allocator, 0);
+    }
 };

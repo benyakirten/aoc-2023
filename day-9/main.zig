@@ -12,13 +12,19 @@ pub fn main() !void {
     defer inputs.close();
 
     const sequences = try readSequences(inputs, allocator);
-    var total: isize = 0;
+    defer allocator.free(sequences);
+
+    var next_total: isize = 0;
+    var previous_total: isize = 0;
 
     for (sequences) |sequence| {
-        total += try sequence.getNext();
+        next_total += try sequence.getNext();
+        previous_total += try sequence.getPrevious();
+        sequence.deinit();
     }
 
-    std.debug.print("Total: {}\n", .{total});
+    std.debug.print("Total for the next item: {}\n", .{next_total});
+    std.debug.print("Total for the previous item: {}\n", .{previous_total});
 }
 
 fn readSequences(file: std.fs.File, allocator: std.mem.Allocator) ![]Sequence {
