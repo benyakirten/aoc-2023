@@ -11,7 +11,14 @@ pub fn main() !void {
     const inputs = try std.fs.cwd().openFile("puzzle_input.txt", .{ .mode = .read_only });
     defer inputs.close();
 
-    _ = try readSequences(inputs, allocator);
+    const sequences = try readSequences(inputs, allocator);
+    var total: usize = 0;
+
+    for (sequences) |sequence| {
+        total += try sequence.getNext();
+    }
+
+    std.debug.print("Total: {}\n", .{total});
 }
 
 fn readSequences(file: std.fs.File, allocator: std.mem.Allocator) ![]Sequence {
@@ -43,19 +50,13 @@ fn readSequences(file: std.fs.File, allocator: std.mem.Allocator) ![]Sequence {
     }
 
     const seq_data = try sequence_list.toOwnedSlice();
-    var sequences = try allocator.alloc(Sequence, seq_data.len);
 
-    for (seq_data) |datum| {
-        const data = try allocator.alloc([]usize, 1);
-        data[0] = datum;
-        const seq = Sequence{
-            .allocator = allocator,
-            .data = data,
-        };
-        sequences[0] = seq;
+    for (seq_data) |data| {
+        const seq = Sequence{ .allocator = allocator, .data = data };
+        try sequence_list.append(seq);
     }
 
-    return sequences;
+    return try sequence_list.toOwnedSlice();
 }
 
 fn processSequence(data: []u8, allocator: std.mem.Allocator) []usize {
