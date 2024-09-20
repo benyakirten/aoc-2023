@@ -26,15 +26,15 @@ pub const Sequence = struct {
         };
 
         for (0..sequence.len - 2) |i| {
-            const delta = sequence[i + 1] - sequence[i];
+            const delta: isize = sequence[i + 1] - sequence[i];
             derived_sequence[i] = delta;
-            derived_to_nothing = derived_sequence and delta == 0;
+            derived_to_nothing = derived_to_nothing and delta == 0;
         }
 
         if (derived_to_nothing) {
             return 0;
         }
 
-        return derived_sequence[derived_sequence.len - 1] + deriveNextItem(derived_sequence, allocator);
+        return derived_sequence[derived_sequence.len - 1] + try deriveNextItem(derived_sequence, allocator);
     }
 };

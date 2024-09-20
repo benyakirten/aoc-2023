@@ -22,11 +22,11 @@ pub fn main() !void {
 }
 
 fn readSequences(file: std.fs.File, allocator: std.mem.Allocator) ![]Sequence {
-    var sequence_list = std.ArrayList([]isize).init(allocator);
+    var sequence_list = std.ArrayList(Sequence).init(allocator);
     defer sequence_list.deinit();
 
-    var sequence = std.ArrayList(u8).init(allocator);
-    defer sequence.deinit();
+    var raw_sequence = std.ArrayList(u8).init(allocator);
+    defer raw_sequence.deinit();
 
     const buf = try allocator.alloc(u8, 1);
     defer allocator.free(buf);
@@ -35,32 +35,26 @@ fn readSequences(file: std.fs.File, allocator: std.mem.Allocator) ![]Sequence {
         const letters_read = try file.read(buf);
 
         if (letters_read == 0 or buf[0] == '\n') {
-            const data = try sequence.toOwnedSlice();
-            const seq = processSequence(data, allocator);
+            const data = try raw_sequence.toOwnedSlice();
+            raw_sequence.clearAndFree();
 
-            try sequence_list.append(seq);
-            sequence.clearAndFree();
+            const seq = try processSequence(data, allocator);
+            const sequence = Sequence{ .allocator = allocator, .data = seq };
+            try sequence_list.append(sequence);
 
             if (letters_read == 0) {
                 break;
             }
         } else {
-            try sequence.append(buf[0]);
+            try raw_sequence.append(buf[0]);
         }
-    }
-
-    const seq_data = try sequence_list.toOwnedSlice();
-
-    for (seq_data) |data| {
-        const seq = Sequence{ .allocator = allocator, .data = data };
-        try sequence_list.append(seq);
     }
 
     return try sequence_list.toOwnedSlice();
 }
 
-fn processSequence(data: []u8, allocator: std.mem.Allocator) []isize {
-    const items = std.ArrayList(isize).init(allocator);
+fn processSequence(data: []u8, allocator: std.mem.Allocator) ![]isize {
+    var items = std.ArrayList(isize).init(allocator);
     defer items.deinit();
 
     var item: isize = 0;
