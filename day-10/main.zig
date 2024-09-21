@@ -14,12 +14,12 @@ pub fn main() !void {
     const map = try Map.parse(inputs, allocator);
     defer map.deinit();
 
-    const tracer = try map.traversePath();
+    var tracer = try map.traversePath();
     defer tracer.deinit();
 
     std.debug.print("Max distance: {}\n", .{tracer.distance / 2});
 
-    const potential_dens = try map.findPotentialDens();
+    const potential_dens = try map.locatePotentialDens(&tracer);
     std.debug.print("\n", .{});
     for (potential_dens) |den| {
         std.debug.print("NEW DEN is valid? {}\n", .{den.is_valid});

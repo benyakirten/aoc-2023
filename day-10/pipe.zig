@@ -221,6 +221,8 @@ const DELTA_PERMUTATIONS = [4]Delta{
     },
 };
 
+const MOVEMENT_DIRECTIONS = [3]i8{ -1, 0, 1 };
+
 const MapError = error{
     NoOrigin,
     OriginError,
@@ -383,22 +385,20 @@ pub const Map = struct {
         return col[position.x];
     }
 
-    fn getNextPosition(position: Position, delta: Delta) ?Position {
-        const position_change = delta.toPositionChange();
-
-        if (position.x < -1 * position_change.x or position.y < -1 * position_change.y) {
+    fn getRelativePosition(position: Position, deltaX: i8, deltaY: i8) ?Position {
+        if (position.x < -1 * deltaX or position.y < -1 * deltaY) {
             return null;
         }
 
-        const finalX = if (position_change.x < 0)
-            position.x - @as(u8, @intCast(-1 * position_change.x))
+        const finalX = if (deltaX < 0)
+            position.x - @as(u8, @intCast(-1 * deltaX))
         else
-            position.x + @as(u8, @intCast(position_change.x));
+            position.x + @as(u8, @intCast(deltaX));
 
-        const finalY = if (position_change.y < 0)
-            position.y - @as(u8, @intCast(-1 * position_change.y))
+        const finalY = if (deltaY < 0)
+            position.y - @as(u8, @intCast(-1 * deltaY))
         else
-            position.y + @as(u8, @intCast(position_change.y));
+            position.y + @as(u8, @intCast(deltaY));
 
         const pos = Position{
             .x = finalX,
@@ -408,11 +408,28 @@ pub const Map = struct {
         return pos;
     }
 
-    pub fn locatePotentialDens(self: Map, tracer: Tracer) ![]PotentialDen {
+    fn getNextPosition(position: Position, delta: Delta) ?Position {
+        const position_change = delta.toPositionChange();
+
+        return Map.getRelativePosition(position, position_change.x, position_change.y);
+    }
+
+    pub fn locatePotentialDens(self: Map, tracer: *Tracer) ![]PotentialDen {
         const all_potential_dens = try self.findPotentialDens();
 
-        const surrounded_dens_list = std.ArrayList(PotentialDen).init(self.allocator);
+        var surrounded_dens_list = std.ArrayList(PotentialDen).init(self.allocator);
         defer surrounded_dens_list.deinit();
+
+        const tracer_positions = try tracer.traversed_positions.toOwnedSlice();
+        defer self.allocator.free(tracer_positions);
+
+        for (all_potential_dens) |den| {
+            if (try den.isSurroundedByPipe(tracer_positions, self)) {
+                try surrounded_dens_list.append(den);
+            }
+        }
+
+        return surrounded_dens_list.toOwnedSlice();
     }
 
     fn findPotentialDens(self: Map) ![]PotentialDen {
@@ -429,10 +446,8 @@ pub const Map = struct {
                     continue;
                 }
 
-                std.debug.print("\nSearching from {any}\n", .{start_position});
                 const potential_den = try PotentialDen.findFrom(start_position, self);
                 for (potential_den.positions) |position| {
-                    std.debug.print("Storing {any} to all den positions covered\n", .{position});
                     try traversed_positions.put(position, true);
                 }
 
@@ -476,19 +491,15 @@ const PotentialDen = struct {
     }
 
     fn findAdjacentGround(position: Position, position_map: *std.AutoArrayHashMap(Position, bool), map: Map) !bool {
-        std.debug.print("CHECKING {any}\n", .{position});
         if (position_map.get(position) != null) {
-            std.debug.print("ALREADY HAVE {any}\n", .{position});
             return true;
         }
 
         const tile_type = map.getTileByPosition(position) catch {
-            std.debug.print("{any} IS NOT A VALID POSITION\n", .{position});
             return false;
         };
 
-        if (tile_type == TileType.Ground) {
-            std.debug.print("PUTTING {any} in cache\n", .{position});
+        if (tile_type == .Ground) {
             try position_map.put(position, true);
             var is_valid = true;
 
@@ -511,7 +522,45 @@ const PotentialDen = struct {
         }
     }
 
-    fn isSurroundedByPipe(self: PotentialDen, tracer: Tracer) bool {
-        //
+    fn getSurroundingPositions(self: PotentialDen, map: Map) ![]Position {
+        var position_list = std.ArrayList(Position).init(self.allocator);
+        defer position_list.deinit();
+
+        for (self.positions) |position| {
+            // TODO: Use comptime
+            for (MOVEMENT_DIRECTIONS) |x| {
+                for (MOVEMENT_DIRECTIONS) |y| {
+                    const pos = Map.getRelativePosition(position, x, y);
+
+                    if (pos == null) {
+                        continue;
+                    }
+
+                    const tile_type = try map.getTileByPosition(pos.?);
+                    if (tile_type == .Ground) {
+                        continue;
+                    }
+
+                    try position_list.append(pos.?);
+                }
+            }
+        }
+
+        return position_list.toOwnedSlice();
+    }
+
+    fn isSurroundedByPipe(self: PotentialDen, tracer_positions: []Position, map: Map) !bool {
+        const surrounding_positions = try self.getSurroundingPositions(map);
+        var num_surrounded_tiles_occupied: usize = 0;
+        outer_loop: for (surrounding_positions) |position| {
+            for (tracer_positions) |tracer_position| {
+                if (position.x == tracer_position.x and position.y == tracer_position.y) {
+                    num_surrounded_tiles_occupied += 1;
+                    continue :outer_loop;
+                }
+            }
+        }
+
+        return num_surrounded_tiles_occupied == surrounding_positions.len;
     }
 };
