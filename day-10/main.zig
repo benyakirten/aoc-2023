@@ -12,7 +12,10 @@ pub fn main() !void {
     defer inputs.close();
 
     const map = try Map.parse(inputs, allocator);
-    const dist = try map.findMaxDistance();
+    defer map.deinit();
 
-    std.debug.print("Max distance: {}\n", .{dist});
+    const tracer = try map.traversePath();
+    defer tracer.deinit();
+
+    std.debug.print("Max distance: {}\n", .{tracer.distance / 2});
 }

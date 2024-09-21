@@ -32,9 +32,14 @@ pub const Tracer = struct {
     position: Position,
     distance: usize,
     last_movement_delta: Delta,
+    traversed_positions: std.ArrayList(Position),
 
-    fn new(position: Position, delta: Delta) Tracer {
-        return Tracer{ .position = position, .last_movement_delta = delta, .distance = 1 };
+    fn new(position: Position, delta: Delta, traversed_positions: std.ArrayList(Position)) Tracer {
+        return Tracer{ .position = position, .last_movement_delta = delta, .distance = 1, .traversed_positions = traversed_positions };
+    }
+
+    pub fn deinit(self: Tracer) void {
+        self.traversed_positions.deinit();
     }
 
     fn moveToEnd(self: *Tracer, map: Map) !void {
@@ -156,6 +161,8 @@ pub const Tracer = struct {
         self.last_movement_delta = new_delta.?;
         self.distance += 1;
 
+        try self.traversed_positions.append(self.position);
+
         return try map.getTileByPosition(self.position) != TileType.Start;
     }
 };
@@ -236,8 +243,7 @@ pub const Map = struct {
             self.allocator.free(row);
         }
 
-        std.os
-            .self.allocator.free(self.map);
+        self.allocator.free(self.map);
     }
 
     pub fn parse(file: std.fs.File, allocator: std.mem.Allocator) !Map {
@@ -286,14 +292,17 @@ pub const Map = struct {
         return Map{ .map = map, .origin = origin.?, .allocator = allocator };
     }
 
-    pub fn findMaxDistance(self: Map) !usize {
+    pub fn traversePath(self: Map) !Tracer {
         for (DELTA_PERMUTATIONS) |delta| {
             const position = getNextPosition(self.origin, delta);
             if (position != null and self.movementIsValid(position.?, delta)) {
-                var tracer = Tracer.new(position.?, delta);
+                var traversed_positions = std.ArrayList(Position).init(self.allocator);
+                try traversed_positions.append(position.?);
+
+                var tracer = Tracer.new(position.?, delta, traversed_positions);
                 try tracer.moveToEnd(self);
 
-                return tracer.distance / 2;
+                return tracer;
             }
         }
 
