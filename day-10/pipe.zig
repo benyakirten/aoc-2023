@@ -21,7 +21,7 @@ pub const TileType = enum(u8) {
             'J' => TileType.BottomRight,
             '7' => TileType.TopRight,
             'F' => TileType.TopLeft,
-            ',' => TileType.Ground,
+            '.' => TileType.Ground,
             else => unreachable,
         };
     }
@@ -38,20 +38,22 @@ pub const Tracer = struct {
     }
 
     fn moveToEnd(self: *Tracer, map: Map) !void {
-        while (self.moveForward(map)) {}
+        while (try self.moveForward(map)) {}
     }
 
     fn moveForward(self: *Tracer, map: Map) !bool {
         const tile_type = try map.getTileByPosition(self.position);
 
-        const new_delta: ?Delta = null;
+        std.debug.print("Tracer at {any} - {any}, direction from {any}\n", .{ self.position, tile_type, self.last_movement_delta });
+
+        var new_delta: ?Delta = null;
         if (tile_type == TileType.BottomLeft) {
-            if (self.delta.direction == .Horizontal and self.last_movement_delta.movement == .Negative) {
+            if (self.last_movement_delta.direction == .Horizontal and self.last_movement_delta.movement == .Negative) {
                 //  ⬆
                 //  L <-
                 new_delta = Delta{
                     .direction = .Vertical,
-                    .movement = .Positive,
+                    .movement = .Negative,
                 };
             } else if (self.last_movement_delta.direction == .Vertical and self.last_movement_delta.movement == .Positive) {
                 // ⬇
@@ -67,7 +69,7 @@ pub const Tracer = struct {
                 //  -> J
                 new_delta = Delta{
                     .direction = .Vertical,
-                    .movement = .Positive,
+                    .movement = .Negative,
                 };
             } else if (self.last_movement_delta.direction == .Vertical and self.last_movement_delta.movement == .Positive) {
                 //     ⬇
@@ -90,7 +92,7 @@ pub const Tracer = struct {
                 //     ⬇
                 new_delta = Delta{
                     .direction = .Vertical,
-                    .movement = .Negative,
+                    .movement = .Positive,
                 };
             }
         } else if (tile_type == TileType.TopRight) {
@@ -106,7 +108,7 @@ pub const Tracer = struct {
                 //     ⬇
                 new_delta = Delta{
                     .direction = .Vertical,
-                    .movement = .Negative,
+                    .movement = .Positive,
                 };
             }
         } else if (tile_type == TileType.Horizontal) {
@@ -147,7 +149,7 @@ pub const Tracer = struct {
             return TracerError.ImpossibleMovement;
         }
 
-        const new_position = Map.getNextPosition(self.position, new_delta);
+        const new_position = Map.getNextPosition(self.position, new_delta.?);
         if (new_position == null) {
             return TracerError.ImpossibleMovement;
         }
@@ -236,40 +238,40 @@ pub const Map = struct {
             self.allocator.free(row);
         }
 
-        self.allocator.free(self.map);
+        std.os
+            .self.allocator.free(self.map);
     }
 
     pub fn parse(file: std.fs.File, allocator: std.mem.Allocator) !Map {
         const content = try file.readToEndAlloc(allocator, MAX_BUFFER_SIZE);
         defer allocator.free(content);
 
-        const row_list = try std.ArrayList([]TileType).initCapacity(allocator, INITIAL_LINE_SIZE);
+        var row_list = try std.ArrayList([]TileType).initCapacity(allocator, INITIAL_LINE_SIZE);
         defer row_list.deinit();
 
-        const column_list = try std.ArrayList(TileType).initCapacity(allocator, INITIAL_LINE_SIZE);
+        var column_list = try std.ArrayList(TileType).initCapacity(allocator, INITIAL_LINE_SIZE);
         defer column_list.deinit();
 
-        var x = 0;
-        var y = 0;
+        var x: usize = 0;
+        var y: usize = 0;
 
         var origin: ?Position = null;
 
         for (content, 0..) |letter, i| {
             if (letter == '\n' or i == content.len - 1) {
-                const col = try column_list.toOwnedSlice();
-                column_list.clearAndFree();
-
                 y += 1;
                 x = 0;
+
+                const col = try column_list.toOwnedSlice();
+                column_list.clearAndFree();
 
                 try row_list.append(col);
             } else {
                 const tile_type = TileType.fromChar(letter);
-
-                if (tile_type == TileType.Ground) {
+                if (tile_type == TileType.Start) {
                     origin = Position{
                         .x = x,
-                        .y = x,
+                        .y = y,
                     };
                 }
                 x += 1;
@@ -288,8 +290,8 @@ pub const Map = struct {
 
     pub fn findMaxDistance(self: Map) !usize {
         for (DELTA_PERMUTATIONS) |delta| {
-            const position = self.getNextPosition(self.origin, delta);
-            if (position != null and self.positionIsValid(position, delta)) {
+            const position = getNextPosition(self.origin, delta);
+            if (position != null and self.positionIsValid(self.origin, delta)) {
                 var tracer = Tracer.new(position.?, delta);
                 try tracer.moveToEnd(self);
 
@@ -373,12 +375,23 @@ pub const Map = struct {
     fn getNextPosition(position: Position, delta: Delta) ?Position {
         const position_change = delta.toPositionChange();
 
-        if (position.x + position_change.x < 0 or position.y + position_change.y < 0) {
+        if (position.x < -1 * position_change.x or position.y < -1 * position_change.y) {
             return null;
         }
+
+        const finalX = if (position_change.x < 0)
+            position.x - @as(u8, @intCast(-1 * position_change.x))
+        else
+            position.x + @as(u8, @intCast(position_change.x));
+
+        const finalY = if (position_change.y < 0)
+            position.y - @as(u8, @intCast(-1 * position_change.y))
+        else
+            position.y + @as(u8, @intCast(position_change.y));
+
         const pos = Position{
-            .x = position.x + position_change.x,
-            .y = position.y + position_change.y,
+            .x = finalX,
+            .y = finalY,
         };
 
         return pos;
