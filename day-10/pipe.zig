@@ -147,7 +147,7 @@ pub const Tracer = struct {
             return TracerError.ImpossibleMovement;
         }
 
-        const new_position = map.getNextPosition(self.position, new_delta);
+        const new_position = Map.getNextPosition(self.position, new_delta);
         if (new_position == null) {
             return TracerError.ImpossibleMovement;
         }
@@ -165,6 +165,11 @@ pub const Position = struct {
     y: usize,
 };
 
+const PositionChange = struct {
+    x: i8,
+    y: i8,
+};
+
 // Use enums to prevent impossible representations of data - only left down up and right
 // Even though this gets boiled down to a deltaY and deltaX
 const DeltaBearing = enum { Vertical, Horizontal };
@@ -175,6 +180,19 @@ const DeltaMovement = enum {
 const Delta = struct {
     direction: DeltaBearing,
     movement: DeltaMovement,
+
+    fn toPositionChange(self: Delta) PositionChange {
+        var deltaX: i8 = if (self.direction == DeltaBearing.Horizontal) 1 else 0;
+        var deltaY: i8 = if (self.direction == DeltaBearing.Vertical) 1 else 0;
+
+        // Up/left is negative movement, down/right is positive movement
+        if (self.movement == DeltaMovement.Negative) {
+            deltaX *= -1;
+            deltaY *= -1;
+        }
+
+        return PositionChange{ .x = deltaX, .y = deltaY };
+    }
 };
 
 const DELTA_PERMUTATIONS = [4]Delta{
@@ -199,6 +217,7 @@ const DELTA_PERMUTATIONS = [4]Delta{
 const MapError = error{
     NoOrigin,
     OriginError,
+    NoViablePathFromOrigin,
     ImpossibleYPosition,
     ImpossibleXPosition,
     ImpossibleMove,
@@ -270,13 +289,72 @@ pub const Map = struct {
     pub fn findMaxDistance(self: Map) !usize {
         for (DELTA_PERMUTATIONS) |delta| {
             const position = self.getNextPosition(self.origin, delta);
-            if (position != null) {
+            if (position != null and self.positionIsValid(position, delta)) {
                 var tracer = Tracer.new(position.?, delta);
                 try tracer.moveToEnd(self);
 
                 return tracer.distance / 2;
             }
         }
+
+        return MapError.NoViablePathFromOrigin;
+    }
+
+    fn positionIsValid(self: Map, position: Position, delta: Delta) bool {
+        // TODO: What is an elegant way of not having to invoke this method twice?
+        // The method has low overhead, but it's still inelegant that we invokve it twice
+        const position_change = delta.toPositionChange();
+
+        const tile_type = self.getTileByPosition(position) catch {
+            return false;
+        };
+
+        if (tile_type == TileType.Ground) {
+            return false;
+        }
+
+        // Cannot move horizontally into a vertical pipe.
+        // i.e. ->|
+        if (tile_type == TileType.Vertical and position_change.x != 0) {
+            return false;
+        }
+
+        // Cannot move vertically into a horizontal pipe.
+        //  i.e. --
+        //       ⬆
+        if (tile_type == TileType.Horizontal and position_change.y != 0) {
+            return false;
+        }
+
+        // Cannot move right or up to bottom left piece
+        // i.e. ->L
+        //        ⬆
+        if (tile_type == TileType.BottomLeft and (position_change.x == 1 or position_change.y == -1)) {
+            return false;
+        }
+
+        // Cannot move left or up to bottom right piece
+        // i.e. J<-
+        //      ⬆
+        if (tile_type == TileType.BottomRight and (position_change.x == -1 or position_change.y == -1)) {
+            return false;
+        }
+
+        // Cannot move right or down to top left piece
+        // i.e.  ⬇
+        //     ->F
+        if (tile_type == TileType.TopLeft and (position_change.x == 1 or position_change.y == 1)) {
+            return false;
+        }
+
+        // Cannot move left or down to top left piece
+        // i.e.  ⬇
+        //       7<-
+        if (tile_type == TileType.TopLeft and (position_change.x == -1 or position_change.y == 1)) {
+            return false;
+        }
+
+        return true;
     }
 
     fn getTileByPosition(self: Map, position: Position) MapError!TileType {
@@ -292,73 +370,16 @@ pub const Map = struct {
         return col[position.x];
     }
 
-    fn getNextPosition(self: Map, position: Position, delta: Delta) ?Position {
-        // only deltaX or deltaY may be a non zero value
-        var deltaX: i8 = if (delta.direction == DeltaBearing.Horizontal) 1 else 0;
-        var deltaY: i8 = if (delta.direction == DeltaBearing.Vertical) 1 else 0;
+    fn getNextPosition(position: Position, delta: Delta) ?Position {
+        const position_change = delta.toPositionChange();
 
-        // Up/left is negative movement, down/right is positive movement
-        if (delta.movement == DeltaMovement.Negative) {
-            deltaX *= -1;
-            deltaY *= -1;
-        }
-
-        if (position.x + deltaX < 0 or position.y + deltaY < 0) {
+        if (position.x + position_change.x < 0 or position.y + position_change.y < 0) {
             return null;
         }
         const pos = Position{
-            .x = position.x + deltaX,
-            .y = position.y + deltaY,
+            .x = position.x + position_change.x,
+            .y = position.y + position_change.y,
         };
-
-        const tile_type = self.getTileByPosition(pos) catch {
-            return null;
-        };
-
-        if (tile_type == TileType.Ground) {
-            return null;
-        }
-
-        // Cannot move horizontally into a vertical pipe.
-        // i.e. ->|
-        if (tile_type == TileType.Vertical and deltaX != 0) {
-            return null;
-        }
-
-        // Cannot move vertically into a horizontal pipe.
-        //  i.e. --
-        //       ⬆
-        if (tile_type == TileType.Horizontal and deltaY != 0) {
-            return null;
-        }
-
-        // Cannot move right or up to bottom left piece
-        // i.e. ->L
-        //        ⬆
-        if (tile_type == TileType.BottomLeft and (deltaX == 1 or deltaY == -1)) {
-            return null;
-        }
-
-        // Cannot move left or up to bottom right piece
-        // i.e. J<-
-        //      ⬆
-        if (tile_type == TileType.BottomRight and (deltaX == -1 or deltaY == -1)) {
-            return null;
-        }
-
-        // Cannot move right or down to top left piece
-        // i.e.  ⬇
-        //     ->F
-        if (tile_type == TileType.TopLeft and (deltaX == 1 or deltaY == 1)) {
-            return null;
-        }
-
-        // Cannot move left or down to top left piece
-        // i.e.  ⬇
-        //       7<-
-        if (tile_type == TileType.TopLeft and (deltaX == -1 or deltaY == 1)) {
-            return null;
-        }
 
         return pos;
     }
