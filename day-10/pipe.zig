@@ -44,8 +44,6 @@ pub const Tracer = struct {
     fn moveForward(self: *Tracer, map: Map) !bool {
         const tile_type = try map.getTileByPosition(self.position);
 
-        std.debug.print("Tracer at {any} - {any}, direction from {any}\n", .{ self.position, tile_type, self.last_movement_delta });
-
         var new_delta: ?Delta = null;
         if (tile_type == TileType.BottomLeft) {
             if (self.last_movement_delta.direction == .Horizontal and self.last_movement_delta.movement == .Negative) {
@@ -291,7 +289,7 @@ pub const Map = struct {
     pub fn findMaxDistance(self: Map) !usize {
         for (DELTA_PERMUTATIONS) |delta| {
             const position = getNextPosition(self.origin, delta);
-            if (position != null and self.positionIsValid(self.origin, delta)) {
+            if (position != null and self.movementIsValid(position.?, delta)) {
                 var tracer = Tracer.new(position.?, delta);
                 try tracer.moveToEnd(self);
 
@@ -302,11 +300,7 @@ pub const Map = struct {
         return MapError.NoViablePathFromOrigin;
     }
 
-    fn positionIsValid(self: Map, position: Position, delta: Delta) bool {
-        // TODO: What is an elegant way of not having to invoke this method twice?
-        // The method has low overhead, but it's still inelegant that we invokve it twice
-        const position_change = delta.toPositionChange();
-
+    fn movementIsValid(self: Map, position: Position, delta: Delta) bool {
         const tile_type = self.getTileByPosition(position) catch {
             return false;
         };
@@ -314,6 +308,9 @@ pub const Map = struct {
         if (tile_type == TileType.Ground) {
             return false;
         }
+
+        // TODO: Find a way to consolidate this and the Tracer.moveForward method
+        const position_change = delta.toPositionChange();
 
         // Cannot move horizontally into a vertical pipe.
         // i.e. ->|
@@ -352,7 +349,7 @@ pub const Map = struct {
         // Cannot move left or down to top left piece
         // i.e.  ⬇
         //       7<-
-        if (tile_type == TileType.TopLeft and (position_change.x == -1 or position_change.y == 1)) {
+        if (tile_type == TileType.TopRight and (position_change.x == -1 or position_change.y == 1)) {
             return false;
         }
 
