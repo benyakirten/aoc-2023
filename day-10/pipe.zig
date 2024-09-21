@@ -263,6 +263,11 @@ pub const Map = struct {
 
         for (content, 0..) |letter, i| {
             if (letter == '\n' or i == content.len - 1) {
+                if (i == content.len - 1) {
+                    const tile_type = TileType.fromChar(letter);
+                    try column_list.append(tile_type);
+                }
+
                 y += 1;
                 x = 0;
 
@@ -366,12 +371,12 @@ pub const Map = struct {
     }
 
     fn getTileByPosition(self: Map, position: Position) MapError!TileType {
-        if (position.y >= self.map.len) {
+        if (position.y < 0 or position.y >= self.map.len) {
             return MapError.ImpossibleYPosition;
         }
 
         const col = self.map[position.y];
-        if (position.x >= col.len) {
+        if (position.x < 0 or position.x >= col.len) {
             return MapError.ImpossibleXPosition;
         }
 
@@ -401,5 +406,112 @@ pub const Map = struct {
         };
 
         return pos;
+    }
+
+    pub fn locatePotentialDens(self: Map, tracer: Tracer) ![]PotentialDen {
+        const all_potential_dens = try self.findPotentialDens();
+
+        const surrounded_dens_list = std.ArrayList(PotentialDen).init(self.allocator);
+        defer surrounded_dens_list.deinit();
+    }
+
+    fn findPotentialDens(self: Map) ![]PotentialDen {
+        var traversed_positions = std.AutoHashMap(Position, bool).init(self.allocator);
+        defer traversed_positions.deinit();
+
+        var potential_dens = std.ArrayList(PotentialDen).init(self.allocator);
+        defer potential_dens.deinit();
+
+        for (self.map, 0..) |row, i| {
+            for (row, 0..) |tile, j| {
+                const start_position = Position{ .x = j, .y = i };
+                if (tile != TileType.Ground or traversed_positions.get(start_position) != null) {
+                    continue;
+                }
+
+                std.debug.print("\nSearching from {any}\n", .{start_position});
+                const potential_den = try PotentialDen.findFrom(start_position, self);
+                for (potential_den.positions) |position| {
+                    std.debug.print("Storing {any} to all den positions covered\n", .{position});
+                    try traversed_positions.put(position, true);
+                }
+
+                if (potential_den.is_valid) {
+                    try potential_dens.append(potential_den);
+                }
+            }
+        }
+
+        return potential_dens.toOwnedSlice();
+    }
+};
+
+const PotentialDen = struct {
+    positions: []Position,
+    is_valid: bool,
+    allocator: std.mem.Allocator,
+
+    fn deinit(self: PotentialDen) void {
+        self.allocator.free(self.positions);
+    }
+
+    fn findFrom(start: Position, map: Map) !PotentialDen {
+        var position_map = std.AutoArrayHashMap(Position, bool).init(map.allocator);
+        defer position_map.deinit();
+
+        const is_valid = try findAdjacentGround(start, &position_map, map);
+
+        var position_list = std.ArrayList(Position).init(map.allocator);
+        defer position_list.deinit();
+
+        for (position_map.keys()) |pos| {
+            try position_list.append(pos);
+        }
+
+        return PotentialDen{
+            .positions = try position_list.toOwnedSlice(),
+            .is_valid = is_valid,
+            .allocator = map.allocator,
+        };
+    }
+
+    fn findAdjacentGround(position: Position, position_map: *std.AutoArrayHashMap(Position, bool), map: Map) !bool {
+        std.debug.print("CHECKING {any}\n", .{position});
+        if (position_map.get(position) != null) {
+            std.debug.print("ALREADY HAVE {any}\n", .{position});
+            return true;
+        }
+
+        const tile_type = map.getTileByPosition(position) catch {
+            std.debug.print("{any} IS NOT A VALID POSITION\n", .{position});
+            return false;
+        };
+
+        if (tile_type == TileType.Ground) {
+            std.debug.print("PUTTING {any} in cache\n", .{position});
+            try position_map.put(position, true);
+            var is_valid = true;
+
+            for (DELTA_PERMUTATIONS) |delta| {
+                const pos = Map.getNextPosition(position, delta);
+
+                if (pos == null) {
+                    is_valid = false;
+                    continue;
+                }
+
+                // Find all adjacent tiles whether or not we're no longer valid.
+                const is_next_tile_valid = try PotentialDen.findAdjacentGround(pos.?, position_map, map);
+                is_valid = is_valid and is_next_tile_valid;
+            }
+
+            return is_valid;
+        } else {
+            return true;
+        }
+    }
+
+    fn isSurroundedByPipe(self: PotentialDen, tracer: Tracer) bool {
+        //
     }
 };

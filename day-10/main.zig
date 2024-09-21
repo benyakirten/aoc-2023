@@ -8,7 +8,7 @@ pub fn main() !void {
 
     const allocator = arena.allocator();
 
-    const inputs = try std.fs.cwd().openFile("puzzle_input.txt", .{ .mode = .read_only });
+    const inputs = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
     defer inputs.close();
 
     const map = try Map.parse(inputs, allocator);
@@ -18,4 +18,13 @@ pub fn main() !void {
     defer tracer.deinit();
 
     std.debug.print("Max distance: {}\n", .{tracer.distance / 2});
+
+    const potential_dens = try map.findPotentialDens();
+    std.debug.print("\n", .{});
+    for (potential_dens) |den| {
+        std.debug.print("NEW DEN is valid? {}\n", .{den.is_valid});
+        for (den.positions) |pos| {
+            std.debug.print("{any}\n", .{pos});
+        }
+    }
 }
