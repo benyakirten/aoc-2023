@@ -11,7 +11,7 @@ pub const Map = struct {
     height: usize,
     allocator: std.mem.Allocator,
 
-    pub fn parse(data: []u8, allocator: std.mem.Allocator) !Map {
+    pub fn parse(data: []u8, allocator: std.mem.Allocator, expansion_coefficient: usize) !Map {
         var galaxies_list = std.ArrayList(Position).init(allocator);
         defer galaxies_list.deinit();
 
@@ -49,6 +49,10 @@ pub const Map = struct {
         defer columns_to_double.deinit();
 
         const galaxies = try galaxies_list.toOwnedSlice();
+        std.debug.print("PRE GALAXIES:\n", .{});
+        for (galaxies) |galaxy| {
+            std.debug.print("GALAXY: {any}\n", .{galaxy});
+        }
 
         for (0..height) |h| {
             var num_galaxies_with_y_coordinate: usize = 0;
@@ -79,37 +83,33 @@ pub const Map = struct {
         const extra_rows = try rows_to_double.toOwnedSlice();
         const extra_columns = try columns_to_double.toOwnedSlice();
 
-        for (extra_rows, 0..) |row_count, i| {
-            for (galaxies) |*galaxy| {
-                // This makes sure the adjustent is based on the original position
-                // i.e. if row 4 and row 8 got expanded
-                // then an item on row 7 will only get boosted from
-                // row 4 being expanded and not row 8
-                // This works because the eligible galaxy.x has already
-                // been increased from previous iterations by however
-                // many iterations have already happened.
-                // If rows 4 and 8 got expanded, for a galaxy
-                // on row 9, then it will be 10 by the time we look at 8
-                // so 10 (galaxy.x) - 1(i) > 8 (row_count)
-                // idem for columns below
-                if (galaxy.x >= i and galaxy.x - i > row_count) {
-                    galaxy.x += 1;
+        std.debug.print("EXTRA columns: {any}\n", .{extra_columns});
+        std.debug.print("EXTRA rows: {any}\n", .{extra_rows});
+
+        for (galaxies) |*galaxy| {
+            var num_expansions: usize = 0;
+            for (extra_rows) |row_count| {
+                if (galaxy.x > row_count) {
+                    num_expansions += 1;
                 }
             }
+            galaxy.x += expansion_coefficient * num_expansions;
         }
 
-        for (extra_columns, 0..) |column_count, i| {
-            for (galaxies) |*galaxy| {
-                if (galaxy.y >= i and galaxy.y - i > column_count) {
-                    galaxy.y += 1;
+        for (galaxies) |*galaxy| {
+            var num_expansions: usize = 0;
+            for (extra_columns) |column_count| {
+                if (galaxy.y > column_count) {
+                    num_expansions += 1;
                 }
             }
+            galaxy.y += expansion_coefficient * num_expansions;
         }
 
         return Map{
             .galaxies = galaxies,
-            .width = width + extra_rows.len,
-            .height = height + extra_columns.len,
+            .width = width + extra_rows.len * expansion_coefficient,
+            .height = height + extra_columns.len * expansion_coefficient,
             .allocator = allocator,
         };
     }
