@@ -20,7 +20,6 @@ pub fn main() !void {
     std.debug.print("Max distance: {}\n", .{tracer.distance / 2});
 
     const potential_dens = try map.findPotentialDens(&tracer);
-    defer allocator.free(potential_dens);
 
-    std.debug.print("Total potential den positions: {}\n", .{potential_dens.len});
+    std.debug.print("Total potential den positions: {}\n", .{potential_dens});
 }

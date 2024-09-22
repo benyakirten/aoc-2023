@@ -414,44 +414,58 @@ pub const Map = struct {
         return Map.getRelativePosition(position, position_change.x, position_change.y);
     }
 
-    pub fn findPotentialDens(self: Map, tracer: *Tracer) ![]Position {
+    pub fn findPotentialDens(self: Map, tracer: *Tracer) !usize {
         const tracer_positions = try tracer.traversed_positions.toOwnedSlice();
         defer self.allocator.free(tracer_positions);
 
-        var positions = std.ArrayList(Position).init(self.allocator);
-        defer positions.deinit();
-
-        for (self.map, 0..) |row, y| {
-            for (row, 0..) |tile_type, x| {
-                if (tile_type != .Ground) {
-                    continue;
-                }
-
-                for (tracer_positions) |tracer_position| {
-                    if (tracer_position.x == x and tracer_position.y == y) {
-                        continue;
-                    }
-                }
-
-                const inversions = countInversions(x, row);
-                if (inversions % 2 == 1) {
-                    const position = Position{ .x = x, .y = y };
-                    try positions.append(position);
-                }
-            }
-        }
-
-        return positions.toOwnedSlice();
-    }
-
-    fn countInversions(starting_x: usize, row: []TileType) usize {
-        var num_inversions: usize = 0;
-        for (row[starting_x..]) |tile_type| {
-            if (tile_type == .BottomRight or tile_type == .BottomLeft or tile_type == .Vertical) {
-                num_inversions += 1;
-            }
-        }
-
-        return num_inversions;
+        const area = calculateArea(tracer_positions);
+        const boundary_points = countBoundaryPoints(tracer_positions);
+        const interior_points: usize = area - ((boundary_points) / 2) + 1;
+        return interior_points;
     }
 };
+
+fn gcd(a: usize, b: usize) usize {
+    if (b == 0) return a;
+    return gcd(b, a % b);
+}
+
+fn calculateArea(positions: []Position) usize {
+    var sum1: usize = 0;
+    var sum2: usize = 0;
+
+    const n = positions.len;
+
+    for (positions[0 .. n - 1], 0..) |pos, i| {
+        const next_pos = positions[(i + 1) % n];
+        sum1 += pos.x * next_pos.y;
+        sum2 += pos.y * next_pos.x;
+    }
+
+    sum1 += positions[n - 1].x * positions[0].y;
+    sum2 += positions[n - 1].y * positions[0].x;
+
+    return absDifference(sum1, sum2) / 2;
+}
+
+fn absDifference(a: usize, b: usize) usize {
+    if (a > b) {
+        return a - b;
+    } else {
+        return b - a;
+    }
+}
+
+pub fn countBoundaryPoints(positions: []Position) usize {
+    const n = positions.len;
+    var boundary_points: usize = 0;
+
+    for (positions[0..n], 0..) |pos, i| {
+        const next_pos = positions[(i + 1) % n]; // Wrap to the first position
+        const dx = absDifference(next_pos.x, pos.x);
+        const dy = absDifference(next_pos.y, pos.y);
+        boundary_points += gcd(dx, dy);
+    }
+
+    return boundary_points;
+}
