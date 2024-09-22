@@ -179,18 +179,18 @@ const PositionChange = struct {
 
 // Use enums to prevent impossible representations of data - only left down up and right
 // Even though this gets boiled down to a deltaY and deltaX
-const DeltaBearing = enum { Vertical, Horizontal };
+const DeltaDirection = enum { Vertical, Horizontal };
 const DeltaMovement = enum {
     Positive,
     Negative,
 };
 const Delta = struct {
-    direction: DeltaBearing,
+    direction: DeltaDirection,
     movement: DeltaMovement,
 
     fn toPositionChange(self: Delta) PositionChange {
-        var deltaX: i8 = if (self.direction == DeltaBearing.Horizontal) 1 else 0;
-        var deltaY: i8 = if (self.direction == DeltaBearing.Vertical) 1 else 0;
+        var deltaX: i8 = if (self.direction == DeltaDirection.Horizontal) 1 else 0;
+        var deltaY: i8 = if (self.direction == DeltaDirection.Vertical) 1 else 0;
 
         // Up/left is negative movement, down/right is positive movement
         if (self.movement == DeltaMovement.Negative) {
@@ -414,153 +414,44 @@ pub const Map = struct {
         return Map.getRelativePosition(position, position_change.x, position_change.y);
     }
 
-    pub fn locatePotentialDens(self: Map, tracer: *Tracer) ![]PotentialDen {
-        const all_potential_dens = try self.findPotentialDens();
-
-        var surrounded_dens_list = std.ArrayList(PotentialDen).init(self.allocator);
-        defer surrounded_dens_list.deinit();
-
+    pub fn findPotentialDens(self: Map, tracer: *Tracer) ![]Position {
         const tracer_positions = try tracer.traversed_positions.toOwnedSlice();
         defer self.allocator.free(tracer_positions);
 
-        for (all_potential_dens) |den| {
-            if (try den.isSurroundedByPipe(tracer_positions, self)) {
-                try surrounded_dens_list.append(den);
-            }
-        }
+        var positions = std.ArrayList(Position).init(self.allocator);
+        defer positions.deinit();
 
-        return surrounded_dens_list.toOwnedSlice();
-    }
-
-    fn findPotentialDens(self: Map) ![]PotentialDen {
-        var traversed_positions = std.AutoHashMap(Position, bool).init(self.allocator);
-        defer traversed_positions.deinit();
-
-        var potential_dens = std.ArrayList(PotentialDen).init(self.allocator);
-        defer potential_dens.deinit();
-
-        for (self.map, 0..) |row, i| {
-            for (row, 0..) |tile, j| {
-                const start_position = Position{ .x = j, .y = i };
-                if (tile != TileType.Ground or traversed_positions.get(start_position) != null) {
+        for (self.map, 0..) |row, y| {
+            for (row, 0..) |tile_type, x| {
+                if (tile_type != .Ground) {
                     continue;
                 }
 
-                const potential_den = try PotentialDen.findFrom(start_position, self);
-                for (potential_den.positions) |position| {
-                    try traversed_positions.put(position, true);
-                }
-
-                if (potential_den.is_valid) {
-                    try potential_dens.append(potential_den);
-                }
-            }
-        }
-
-        return potential_dens.toOwnedSlice();
-    }
-};
-
-const PotentialDen = struct {
-    positions: []Position,
-    is_valid: bool,
-    allocator: std.mem.Allocator,
-
-    fn deinit(self: PotentialDen) void {
-        self.allocator.free(self.positions);
-    }
-
-    fn findFrom(start: Position, map: Map) !PotentialDen {
-        var position_map = std.AutoArrayHashMap(Position, bool).init(map.allocator);
-        defer position_map.deinit();
-
-        const is_valid = try findAdjacentGround(start, &position_map, map);
-
-        var position_list = std.ArrayList(Position).init(map.allocator);
-        defer position_list.deinit();
-
-        for (position_map.keys()) |pos| {
-            try position_list.append(pos);
-        }
-
-        return PotentialDen{
-            .positions = try position_list.toOwnedSlice(),
-            .is_valid = is_valid,
-            .allocator = map.allocator,
-        };
-    }
-
-    fn findAdjacentGround(position: Position, position_map: *std.AutoArrayHashMap(Position, bool), map: Map) !bool {
-        if (position_map.get(position) != null) {
-            return true;
-        }
-
-        const tile_type = map.getTileByPosition(position) catch {
-            return false;
-        };
-
-        if (tile_type == .Ground) {
-            try position_map.put(position, true);
-            var is_valid = true;
-
-            for (DELTA_PERMUTATIONS) |delta| {
-                const pos = Map.getNextPosition(position, delta);
-
-                if (pos == null) {
-                    is_valid = false;
-                    continue;
-                }
-
-                // Find all adjacent tiles whether or not we're no longer valid.
-                const is_next_tile_valid = try PotentialDen.findAdjacentGround(pos.?, position_map, map);
-                is_valid = is_valid and is_next_tile_valid;
-            }
-
-            return is_valid;
-        } else {
-            return true;
-        }
-    }
-
-    fn getSurroundingPositions(self: PotentialDen, map: Map) ![]Position {
-        var position_list = std.ArrayList(Position).init(self.allocator);
-        defer position_list.deinit();
-
-        for (self.positions) |position| {
-            // TODO: Use comptime
-            for (MOVEMENT_DIRECTIONS) |x| {
-                for (MOVEMENT_DIRECTIONS) |y| {
-                    const pos = Map.getRelativePosition(position, x, y);
-
-                    if (pos == null) {
+                for (tracer_positions) |tracer_position| {
+                    if (tracer_position.x == x and tracer_position.y == y) {
                         continue;
                     }
+                }
 
-                    const tile_type = try map.getTileByPosition(pos.?);
-                    if (tile_type == .Ground) {
-                        continue;
-                    }
-
-                    try position_list.append(pos.?);
+                const inversions = countInversions(x, row);
+                if (inversions % 2 == 1) {
+                    const position = Position{ .x = x, .y = y };
+                    try positions.append(position);
                 }
             }
         }
 
-        return position_list.toOwnedSlice();
+        return positions.toOwnedSlice();
     }
 
-    fn isSurroundedByPipe(self: PotentialDen, tracer_positions: []Position, map: Map) !bool {
-        const surrounding_positions = try self.getSurroundingPositions(map);
-        var num_surrounded_tiles_occupied: usize = 0;
-        outer_loop: for (surrounding_positions) |position| {
-            for (tracer_positions) |tracer_position| {
-                if (position.x == tracer_position.x and position.y == tracer_position.y) {
-                    num_surrounded_tiles_occupied += 1;
-                    continue :outer_loop;
-                }
+    fn countInversions(starting_x: usize, row: []TileType) usize {
+        var num_inversions: usize = 0;
+        for (row[starting_x..]) |tile_type| {
+            if (tile_type == .BottomRight or tile_type == .BottomLeft or tile_type == .Vertical) {
+                num_inversions += 1;
             }
         }
 
-        return num_surrounded_tiles_occupied == surrounding_positions.len;
+        return num_inversions;
     }
 };
