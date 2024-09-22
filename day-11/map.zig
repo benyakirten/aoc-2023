@@ -53,10 +53,6 @@ pub const Map = struct {
         defer columns_to_double.deinit();
 
         const galaxies = try galaxies_list.toOwnedSlice();
-        std.debug.print("PRE GALAXIES:\n", .{});
-        for (galaxies) |galaxy| {
-            std.debug.print("GALAXY: {any}\n", .{galaxy});
-        }
 
         for (0..height) |h| {
             var num_galaxies_with_y_coordinate: usize = 0;
@@ -90,8 +86,7 @@ pub const Map = struct {
         const extra_columns = try columns_to_double.toOwnedSlice();
         defer allocator.free(extra_columns);
 
-        std.debug.print("EXTRA columns: {any}\n", .{extra_columns});
-        std.debug.print("EXTRA rows: {any}\n", .{extra_rows});
+        const coefficient = if (expansion_coefficient == 1) 1 else expansion_coefficient - 1;
 
         for (galaxies) |*galaxy| {
             var num_expansions: usize = 0;
@@ -101,7 +96,7 @@ pub const Map = struct {
                 }
                 num_expansions += 1;
             }
-            galaxy.x += expansion_coefficient * num_expansions;
+            galaxy.x += coefficient * num_expansions;
         }
 
         for (galaxies) |*galaxy| {
@@ -112,7 +107,7 @@ pub const Map = struct {
                 }
                 num_expansions += 1;
             }
-            galaxy.y += expansion_coefficient * num_expansions;
+            galaxy.y += coefficient * num_expansions;
         }
 
         return Map{
@@ -130,7 +125,7 @@ pub const Map = struct {
     pub fn galaxyDistances(self: Map) ![]usize {
         var distances = std.ArrayList(usize).init(self.allocator);
         for (0..self.galaxies.len) |i| {
-            for (i..self.galaxies.len) |j| {
+            for (i + 1..self.galaxies.len) |j| {
                 const galaxy_a = self.galaxies[i];
                 const galaxy_b = self.galaxies[j];
 
