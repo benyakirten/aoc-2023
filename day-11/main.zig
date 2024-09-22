@@ -17,8 +17,12 @@ pub fn main() !void {
     defer allocator.free(content);
 
     const map = try Map.parse(content, allocator);
-    std.debug.print("POST TRANSFORMATION: {}x{}\n", .{ map.width, map.height });
-    for (map.galaxies) |galaxy| {
-        std.debug.print("Galaxy {},{}\n", .{ galaxy.x, galaxy.y });
+    const distances = try map.galaxyDistances();
+    var total: usize = 0;
+
+    for (distances) |distance| {
+        total += distance;
     }
+
+    std.debug.print("Total distance between galaxies: {}\n", .{total});
 }

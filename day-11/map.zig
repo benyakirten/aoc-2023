@@ -113,4 +113,26 @@ pub const Map = struct {
             .allocator = allocator,
         };
     }
+
+    fn distance(a: usize, b: usize) usize {
+        return if (a > b) a - b else b - a;
+    }
+
+    pub fn galaxyDistances(self: Map) ![]usize {
+        var distances = std.ArrayList(usize).init(self.allocator);
+        for (0..self.galaxies.len) |i| {
+            for (i..self.galaxies.len) |j| {
+                const galaxy_a = self.galaxies[i];
+                const galaxy_b = self.galaxies[j];
+
+                const x_distance = distance(galaxy_a.x, galaxy_b.x);
+                const y_distance = distance(galaxy_a.y, galaxy_b.y);
+
+                const dist = x_distance + y_distance;
+                try distances.append(dist);
+            }
+        }
+
+        return try distances.toOwnedSlice();
+    }
 };
