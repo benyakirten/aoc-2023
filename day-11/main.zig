@@ -16,7 +16,9 @@ pub fn main() !void {
     const content = try inputs.readToEndAlloc(allocator, MAX_BUFFER_SIZE);
     defer allocator.free(content);
 
-    const map = try Map.parse(content, allocator, 1);
+    const map = try Map.parse(content, allocator, 100);
+    defer map.deinit();
+
     std.debug.print("POST GALAXIES:\n", .{});
     for (map.galaxies) |galaxy| {
         std.debug.print("GALAXY: {any}\n", .{galaxy});

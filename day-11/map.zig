@@ -11,6 +11,10 @@ pub const Map = struct {
     height: usize,
     allocator: std.mem.Allocator,
 
+    pub fn deinit(self: Map) void {
+        self.allocator.free(self.galaxies);
+    }
+
     pub fn parse(data: []u8, allocator: std.mem.Allocator, expansion_coefficient: usize) !Map {
         var galaxies_list = std.ArrayList(Position).init(allocator);
         defer galaxies_list.deinit();
@@ -81,7 +85,10 @@ pub const Map = struct {
         }
 
         const extra_rows = try rows_to_double.toOwnedSlice();
+        defer allocator.free(extra_rows);
+
         const extra_columns = try columns_to_double.toOwnedSlice();
+        defer allocator.free(extra_columns);
 
         std.debug.print("EXTRA columns: {any}\n", .{extra_columns});
         std.debug.print("EXTRA rows: {any}\n", .{extra_rows});
@@ -89,9 +96,10 @@ pub const Map = struct {
         for (galaxies) |*galaxy| {
             var num_expansions: usize = 0;
             for (extra_rows) |row_count| {
-                if (galaxy.x > row_count) {
-                    num_expansions += 1;
+                if (galaxy.x <= row_count) {
+                    break;
                 }
+                num_expansions += 1;
             }
             galaxy.x += expansion_coefficient * num_expansions;
         }
@@ -99,9 +107,10 @@ pub const Map = struct {
         for (galaxies) |*galaxy| {
             var num_expansions: usize = 0;
             for (extra_columns) |column_count| {
-                if (galaxy.y > column_count) {
-                    num_expansions += 1;
+                if (galaxy.y <= column_count) {
+                    break;
                 }
+                num_expansions += 1;
             }
             galaxy.y += expansion_coefficient * num_expansions;
         }
