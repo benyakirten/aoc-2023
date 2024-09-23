@@ -87,7 +87,8 @@ pub const HotSprings = struct {
 
     // pub fn permute(self: HotSprings) void {
     //     var index: u8 = 0;
-    //     for (self.positions) |position| {}
+    //     var position_index: u8 = 0;
+
     // }
 
     fn isPossibleSolution(self: HotSprings, proposed: []KnownRecord) bool {
@@ -209,6 +210,209 @@ test "HotSprings.isPossibleSolution will identify a solution that has the incorr
 
     const is_valid_solution = hot_springs.isPossibleSolution(proposed[0..]);
     try std.testing.expect(!is_valid_solution);
+}
+
+test "HotSprings.isPossibleSolution will reecognize multiple possible solutions for a problem with multiple solutions" {
+    // ?###???????? 3,2,1
+    var records = [12]Record{
+        .Unknown,
+        .Damaged,
+        .Damaged,
+        .Damaged,
+        .Unknown,
+        .Unknown,
+        .Unknown,
+        .Unknown,
+        .Unknown,
+        .Unknown,
+        .Unknown,
+        .Unknown,
+    };
+
+    var positions = [3]u8{ 3, 2, 1 };
+    const hot_springs = HotSprings{
+        .allocator = std.testing.allocator,
+        .positions = positions[0..],
+        .records = records[0..],
+    };
+
+    var _proposed_1 = [12]KnownRecord{
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Operational,
+    };
+    const proposed_1 = _proposed_1[0..];
+
+    var _proposed_2 = [12]KnownRecord{
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Damaged,
+        .Operational,
+        .Operational,
+    };
+    const proposed_2 = _proposed_2[0..];
+
+    var _proposed_3 = [12]KnownRecord{
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Operational,
+        .Damaged,
+        .Operational,
+    };
+    const proposed_3 = _proposed_3[0..];
+
+    var _proposed_4 = [12]KnownRecord{
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Operational,
+        .Operational,
+        .Damaged,
+    };
+    const proposed_4 = _proposed_4[0..];
+
+    var _proposed_5 = [12]KnownRecord{
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Damaged,
+        .Operational,
+        .Operational,
+    };
+    const proposed_5 = _proposed_5[0..];
+
+    var _proposed_6 = [12]KnownRecord{
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Damaged,
+        .Operational,
+    };
+    const proposed_6 = _proposed_6[0..];
+
+    var _proposed_7 = [12]KnownRecord{
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Operational,
+        .Damaged,
+    };
+    const proposed_7 = _proposed_7[0..];
+
+    var _proposed_8 = [12]KnownRecord{
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Damaged,
+        .Operational,
+    };
+    const proposed_8 = _proposed_8[0..];
+
+    var _proposed_9 = [12]KnownRecord{
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Damaged,
+    };
+    const proposed_9 = _proposed_9[0..];
+
+    var _proposed_10 = [12]KnownRecord{
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Operational,
+        .Operational,
+        .Operational,
+        .Damaged,
+        .Damaged,
+        .Operational,
+        .Damaged,
+    };
+    const proposed_10 = _proposed_10[0..];
+
+    const proposed = [10][]KnownRecord{
+        proposed_1,
+        proposed_2,
+        proposed_3,
+        proposed_4,
+        proposed_5,
+        proposed_6,
+        proposed_7,
+        proposed_8,
+        proposed_9,
+        proposed_10,
+    };
+
+    for (proposed) |prop| {
+        const is_valid_solution = hot_springs.isPossibleSolution(prop[0..]);
+        try std.testing.expect(is_valid_solution);
+    }
 }
 
 pub const Groups = struct {
