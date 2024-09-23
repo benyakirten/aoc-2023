@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const HotSpring = @import("springs.zig").HotSpring;
+const Record = @import("springs.zig").Record;
 
 const MAX_BUFFER_SIZE = 1_000_000;
 
@@ -18,4 +19,8 @@ pub fn main() !void {
 
     const hot_springs = try HotSpring.parse(content, allocator);
     defer allocator.free(hot_springs);
+
+    for (hot_springs) |spring| {
+        spring.permute();
+    }
 }
