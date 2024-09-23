@@ -73,11 +73,17 @@ pub const HotSprings = struct {
             try records_list.append(try Record.fromChar(datum));
         }
 
+        var position: u8 = 0;
         for (data[positions_index..]) |datum| {
             if (datum >= '0' and datum <= '9') {
-                try positions_list.append(datum - '0');
+                position = position * 10 + datum - '0';
+            } else {
+                try positions_list.append(position);
+                position = 0;
             }
         }
+
+        try positions_list.append(position);
 
         const records = try records_list.toOwnedSlice();
         const positions = try positions_list.toOwnedSlice();
