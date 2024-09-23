@@ -28,6 +28,15 @@ pub const Record = enum(u8) {
 pub const KnownRecord = enum(u8) {
     Operational = '.',
     Damaged = '#',
+
+    fn toInts(records: []KnownRecord, allocator: std.mem.Allocator) ![]u8 {
+        const data = try allocator.alloc(u8, records.len);
+        for (records, 0..) |record, i| {
+            data[i] = @intFromEnum(record);
+        }
+
+        return data;
+    }
 };
 
 pub const PartialHotSprings = struct {
@@ -118,9 +127,9 @@ pub const HotSprings = struct {
         return HotSprings{ .records = records, .positions = positions, .allocator = allocator };
     }
 
-    pub fn bruteForcePermute(self: HotSprings) ![][]KnownRecord {
+    fn bruteForcePermute(records: []Record, positions: []u8, allocator: std.mem.Allocator) ![][]KnownRecord {
         var num_unknowns: u8 = 0;
-        for (self.records) |record| {
+        for (records) |record| {
             if (record == .Unknown) {
                 num_unknowns += 1;
             }
@@ -128,15 +137,15 @@ pub const HotSprings = struct {
 
         const num_permutations = std.math.pow(usize, 2, num_unknowns);
 
-        var proposed_solution_list = std.ArrayList([]KnownRecord).init(self.allocator);
+        var proposed_solution_list = std.ArrayList([]KnownRecord).init(allocator);
         defer proposed_solution_list.deinit();
 
-        var possible_solution = try std.ArrayList(KnownRecord).initCapacity(self.allocator, self.records.len);
+        var possible_solution = try std.ArrayList(KnownRecord).initCapacity(allocator, records.len);
         defer possible_solution.deinit();
 
         for (0..num_permutations) |i| {
             var num_unknowns_encountered: u6 = 0;
-            for (self.records) |record| {
+            for (records) |record| {
                 if (record != .Unknown) {
                     const known_record: KnownRecord = if (record == .Damaged) .Damaged else .Operational;
                     try possible_solution.append(known_record);
@@ -151,7 +160,7 @@ pub const HotSprings = struct {
             const solution = try possible_solution.toOwnedSlice();
             possible_solution.clearAndFree();
 
-            if (self.isPossibleSolution(solution)) {
+            if (try isPossibleSolution(records, positions, solution, allocator)) {
                 try proposed_solution_list.append(solution);
             }
         }
@@ -160,19 +169,19 @@ pub const HotSprings = struct {
         return solutions;
     }
 
-    pub fn unfoldPermute(self: HotSprings) !usize {
+    pub fn permute(self: HotSprings, reps: u8) !usize {
         var cache = std.HashMap(PartialHotSprings, usize, PartialHotSpringsContext, 80).init(self.allocator);
 
-        var records_list = try std.ArrayList(Record).initCapacity(self.allocator, self.records.len * 5 + 4);
+        var records_list = try std.ArrayList(Record).initCapacity(self.allocator, self.records.len * reps + 4);
         try records_list.appendSlice(self.records);
-        for (0..4) |_| {
+        for (0..reps - 1) |_| {
             try records_list.append(.Unknown);
             try records_list.appendSlice(self.records);
         }
         const records = try records_list.toOwnedSlice();
 
-        var positions_list = try std.ArrayList(u8).initCapacity(self.allocator, self.positions.len * 5);
-        for (0..5) |_| {
+        var positions_list = try std.ArrayList(u8).initCapacity(self.allocator, self.positions.len * reps);
+        for (0..reps) |_| {
             try positions_list.appendSlice(self.positions);
         }
         const positions = try positions_list.toOwnedSlice();
@@ -207,71 +216,55 @@ pub const HotSprings = struct {
             return cache_hit.?;
         }
 
-        // Check that we have enough records available to fill
-        // in all the remaining positions
-        var min_remaining_len: usize = 0;
-        for (positions) |position| {
-            min_remaining_len += position;
-        }
-
-        // To check that we have enough empty spaces (operational hot springs)
-        // to break up the damaged ones, we add how many positions there are
-        min_remaining_len += positions.len - 1;
-        if (records.len < min_remaining_len) {
-            return 0;
-        }
-
         // If we have an operational hot springs at the beginning, it does nothing so we can skip it
         if (records[0] == .Operational) {
             return dynamicPermute(records[1..], positions, cache, allocator);
         }
 
-        const current_position = positions[0];
-        var all_records_valid: bool = true;
-        for (records[0..current_position]) |record| {
+        // Find the smallest contiguous block we can solve
+        var contiguous_block_end_len: u8 = 0;
+        for (records) |record| {
             if (record == .Operational) {
-                all_records_valid = false;
                 break;
             }
+            contiguous_block_end_len += 1;
         }
 
-        const last_record_valid = records.len == current_position and records[current_position] != .Damaged;
+        // const x = try Record.toInts(records, allocator);
+        // defer allocator.free(x);
 
-        var total: usize = 0;
-        if (all_records_valid and last_record_valid) {
-            const max_idx = if (records.len < current_position + 1) records.len else current_position + 1;
-            total += try dynamicPermute(records[max_idx..], positions[1..], cache, allocator);
+        // std.debug.print("{s} - {any}: {}\n", .{ x, positions, contiguous_block_end_len });
+
+        // Find at least how many positions we could potentially solve with it
+        var relevant_positions_len: u8 = 1;
+        var total_blocks: u8 = 0;
+        for (positions) |position| {
+            if (total_blocks + position + relevant_positions_len >= contiguous_block_end_len) {
+                break;
+            }
+            relevant_positions_len += 1;
+            total_blocks += position;
         }
 
-        if (records[0] != .Damaged) {
-            total += try dynamicPermute(records[1..], positions, cache, allocator);
-        }
+        const shortest_contiguous_block_permutations = try bruteForcePermute(
+            records[0..contiguous_block_end_len],
+            positions[0..relevant_positions_len],
+            allocator,
+        );
+
+        const total = shortest_contiguous_block_permutations.len;
+        const shortest_records_key = try Record.toInts(records[0..contiguous_block_end_len], allocator);
+        defer allocator.free(shortest_records_key);
+
+        try cache.put(PartialHotSprings{ .positions = positions[0..relevant_positions_len], .records = shortest_records_key }, total);
 
         // Insert thte data into the cache
-        try cache.put(PartialHotSprings{ .positions = positions, .records = records_key }, total);
-        return total;
-    }
-
-    fn isPossibleSolution(self: HotSprings, proposed: []KnownRecord) bool {
-        if (self.records.len != proposed.len) {
-            return false;
-        }
-
-        for (0..self.records.len) |i| {
-            const record = self.records[i];
-            const proposed_item = proposed[i];
-
-            if (record != .Unknown and @intFromEnum(record) != @intFromEnum(proposed_item)) {
-                return false;
-            }
-        }
-
-        const groups = Groups.identify(proposed, self.allocator) catch {
-            return false;
-        };
-        defer groups.deinit();
-
-        return std.mem.eql(u8, self.positions, groups.positions);
+        return total + try dynamicPermute(
+            records[contiguous_block_end_len..],
+            positions[relevant_positions_len..],
+            cache,
+            allocator,
+        );
     }
 };
 
@@ -896,4 +889,65 @@ test "Group.identify end of record begin operational" {
     const got = Group.identify(known_records[0..], 3);
     const want = Group{ .start = 4, .len = 2 };
     try std.testing.expectEqual(want, got);
+}
+
+const PossibleSolution = struct {
+    records: []u8,
+    positions: []u8,
+    proposed: []u8,
+};
+
+const PossibleSolutionContext = struct {
+    pub fn hash(_: PossibleSolutionContext, key: PossibleSolution) u64 {
+        var h = std.hash.Fnv1a_32.init();
+        h.update(key.positions);
+        h.update(key.records);
+        h.update(key.proposed);
+
+        return h.final();
+    }
+
+    pub fn eql(_: PossibleSolutionContext, a: PossibleSolution, b: PossibleSolution) bool {
+        return std.mem.eql(u8, a.positions, b.positions) and
+            std.mem.eql(u8, a.records, b.records) and
+            std.mem.eql(u8, a.proposed, b.records);
+    }
+};
+
+// var solution_cache = std.HashMap(PossibleSolution, bool, PossibleSolutionContext, 80).init(std.heap.page_allocator);
+
+fn isPossibleSolution(records: []Record, positions: []u8, proposed: []KnownRecord, allocator: std.mem.Allocator) !bool {
+    if (records.len != proposed.len) {
+        return false;
+    }
+
+    // const records_key = try Record.toInts(records, allocator);
+    // defer allocator.free(records_key);
+    // const proposed_key = try KnownRecord.toInts(proposed, allocator);
+    // defer allocator.free(proposed_key);
+
+    // const possible_solution = PossibleSolution{ .positions = positions, .proposed = proposed_key, .records = records_key };
+
+    // const cache_hit = solution_cache.get(possible_solution);
+    // if (cache_hit != null) {
+    //     return cache_hit.?;
+    // }
+
+    for (0..records.len) |i| {
+        const record = records[i];
+        const proposed_item = proposed[i];
+
+        if (record != .Unknown and @intFromEnum(record) != @intFromEnum(proposed_item)) {
+            return false;
+        }
+    }
+
+    const groups = Groups.identify(proposed, allocator) catch {
+        return false;
+    };
+    defer groups.deinit();
+
+    const result = std.mem.eql(u8, positions, groups.positions);
+    // try solution_cache.put(possible_solution, result);
+    return result;
 }
