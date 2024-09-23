@@ -86,14 +86,18 @@ pub const HotSprings = struct {
     }
 
     pub fn bruteForcePermutations(self: HotSprings) ![][]KnownRecord {
+        std.debug.print("For record ", .{});
         var num_unknowns: u8 = 0;
         for (self.records) |record| {
-            if (@intFromEnum(record) == @intFromEnum(Record.Unknown)) {
+            std.debug.print("{c}", .{@intFromEnum(record)});
+            if (record == .Unknown) {
                 num_unknowns += 1;
             }
         }
 
         const num_permutations = std.math.pow(usize, 2, num_unknowns);
+        std.debug.print(": {} permutations discovered, of which ", .{num_permutations});
+        const time1 = std.time.milliTimestamp();
 
         var proposed_solution_list = std.ArrayList([]KnownRecord).init(self.allocator);
         defer proposed_solution_list.deinit();
@@ -123,7 +127,10 @@ pub const HotSprings = struct {
             }
         }
 
-        return proposed_solution_list.toOwnedSlice();
+        const solutions = try proposed_solution_list.toOwnedSlice();
+        const time2 = std.time.milliTimestamp();
+        std.debug.print("{} are valid ({}ms)\n", .{ solutions.len, time2 - time1 });
+        return solutions;
     }
 
     fn isPossibleSolution(self: HotSprings, proposed: []KnownRecord) bool {
