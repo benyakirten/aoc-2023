@@ -129,7 +129,7 @@ pub const HotSprings = struct {
 
         const solutions = try proposed_solution_list.toOwnedSlice();
         const time2 = std.time.milliTimestamp();
-        std.debug.print("{} are valid ({}ms)\n", .{ solutions.len, time2 - time1 });
+        std.debug.print("{} are valid against {any} ({}ms)\n", .{ solutions.len, self.positions, time2 - time1 });
         return solutions;
     }
 
