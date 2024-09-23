@@ -85,11 +85,46 @@ pub const HotSprings = struct {
         return HotSprings{ .records = records, .positions = positions, .allocator = allocator };
     }
 
-    // pub fn permute(self: HotSprings) void {
-    //     var index: u8 = 0;
-    //     var position_index: u8 = 0;
+    pub fn bruteForcePermutations(self: HotSprings) ![][]KnownRecord {
+        var num_unknowns: u8 = 0;
+        for (self.records) |record| {
+            if (@intFromEnum(record) == @intFromEnum(Record.Unknown)) {
+                num_unknowns += 1;
+            }
+        }
 
-    // }
+        const num_permutations = std.math.pow(usize, 2, num_unknowns);
+
+        var proposed_solution_list = std.ArrayList([]KnownRecord).init(self.allocator);
+        defer proposed_solution_list.deinit();
+
+        var possible_solution = try std.ArrayList(KnownRecord).initCapacity(self.allocator, self.records.len);
+        defer possible_solution.deinit();
+
+        for (0..num_permutations) |i| {
+            var num_unknowns_encountered: u6 = 0;
+            for (self.records) |record| {
+                if (record != .Unknown) {
+                    const known_record: KnownRecord = if (record == .Damaged) .Damaged else .Operational;
+                    try possible_solution.append(known_record);
+                } else {
+                    const permutation_bit = i >> num_unknowns_encountered;
+                    const permutation: KnownRecord = if (permutation_bit & 1 == 0) .Operational else .Damaged;
+                    try possible_solution.append(permutation);
+                    num_unknowns_encountered += 1;
+                }
+            }
+
+            const solution = try possible_solution.toOwnedSlice();
+            possible_solution.clearAndFree();
+
+            if (self.isPossibleSolution(solution)) {
+                try proposed_solution_list.append(solution);
+            }
+        }
+
+        return proposed_solution_list.toOwnedSlice();
+    }
 
     fn isPossibleSolution(self: HotSprings, proposed: []KnownRecord) bool {
         if (self.records.len != proposed.len) {

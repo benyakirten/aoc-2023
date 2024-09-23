@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const HotSpring = @import("springs.zig").HotSpring;
+const HotSprings = @import("springs.zig").HotSprings;
 const Record = @import("springs.zig").Record;
 
 const MAX_BUFFER_SIZE = 1_000_000;
@@ -17,10 +17,14 @@ pub fn main() !void {
     const content = try inputs.readToEndAlloc(allocator, MAX_BUFFER_SIZE);
     defer allocator.free(content);
 
-    const hot_springs = try HotSpring.parse(content, allocator);
+    const hot_springs = try HotSprings.parse(content, allocator);
     defer allocator.free(hot_springs);
 
-    for (hot_springs) |spring| {
-        spring.permute();
+    var num_permutations: usize = 0;
+    for (hot_springs) |springs| {
+        const permutations = try springs.bruteForcePermutations();
+        num_permutations += permutations.len;
     }
+
+    std.debug.print("Total permutations: {}\n", .{num_permutations});
 }
