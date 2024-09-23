@@ -20,11 +20,19 @@ pub fn main() !void {
     const hot_springs = try HotSprings.parse(content, allocator);
     defer allocator.free(hot_springs);
 
-    var num_permutations: usize = 0;
+    // var num_permutations: usize = 0;
+    // for (hot_springs) |springs| {
+    //     const permutations = try springs.bruteForcePermute();
+    //     num_permutations += permutations.len;
+    // }
+
+    // std.debug.print("Total permutations: {}\n", .{num_permutations});
+
+    var num_unfolded_permutations: usize = 0;
     for (hot_springs) |springs| {
-        const permutations = try springs.bruteForcePermutations();
-        num_permutations += permutations.len;
+        const permutations = try springs.unfoldPermute();
+        num_unfolded_permutations += permutations;
     }
 
-    std.debug.print("Total permutations: {}\n", .{num_permutations});
+    std.debug.print("Total unfolded permutations: {}\n", .{num_unfolded_permutations});
 }
