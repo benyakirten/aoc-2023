@@ -267,7 +267,7 @@ pub const HotSprings = struct {
                 total += try self.dynamicPermute(Arrangement{
                     .num_records = arrangement.num_records + 1,
                     .position_index = arrangement.position_index,
-                    .count = arrangement.count,
+                    .count = arrangement.count + 1,
                 }, cache);
             },
         }
