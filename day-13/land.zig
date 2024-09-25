@@ -59,20 +59,26 @@ pub const Landscape = struct {
         const rows_len = self.land.len;
         const cols_len = self.land[0].len;
 
-        var rotated = try self.allocator.alloc([rows_len]LandType, cols_len);
+        var matrix = try self.allocator.alloc([]LandType, cols_len);
         for (0..cols_len) |i| {
-            const col = try self.allocator.alloc(LandType, rows_len);
-            rotated[i] = col;
+            const row = try self.allocator.alloc(LandType, rows_len);
+            matrix[i] = row;
         }
 
+        // 1  2  3  4    4 5 9
+        // 5  6  7  8 -> 3 6 10
+        // 9 10 11 12    2 7 11
+        //               1 8 12
         // Transpose the matrix and reverse columns
-        for (self.land, 0..) |row, i| {
-            for (row, 0..) |val, j| {
-                rotated[cols_len - 1 - j][i] = val;
+        for (0..self.land.len) |i| {
+            const row = self.land[i];
+            for (0..row.len) |j| {
+                const val = row[j];
+                matrix[cols_len - j - 1][i] = val;
             }
         }
 
-        return rotated;
+        return matrix;
     }
 
     fn identifySymmetry(allocator: std.mem.Allocator, land: [][]LandType, direction: SymmetryType) !?Symmetry {
@@ -201,3 +207,33 @@ pub const Landscape = struct {
         }
     }
 };
+
+test "Landscape.rotateLandLeft" {
+    var col_1_arr = [4]LandType{ .Ash, .Rocks, .Ash, .Rocks };
+    const col_1 = col_1_arr[0..];
+
+    var col_2_arr = [4]LandType{ .Rocks, .Rocks, .Rocks, .Ash };
+    const col_2 = col_2_arr[0..];
+
+    var rows_arr = [2][]LandType{ col_1, col_2 };
+    const rows = rows_arr[0..];
+
+    const ls = Landscape{
+        .land = rows,
+        .allocator = std.testing.allocator,
+    };
+
+    var want_arr_1 = [2]LandType{ .Rocks, .Ash };
+    var want_arr_2 = [2]LandType{ .Ash, .Rocks };
+    var want_arr_3 = [2]LandType{ .Rocks, .Rocks };
+    var want_arr_4 = [2]LandType{ .Ash, .Rocks };
+
+    var want_rows = [4][]LandType{ want_arr_1[0..], want_arr_2[0..], want_arr_3[0..], want_arr_4[0..] };
+    const want = want_rows[0..];
+
+    const got = try ls.rotateLandLeft();
+
+    defer ls.free_land(got);
+
+    try std.testing.expectEqualDeep(want, got);
+}
