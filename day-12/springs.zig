@@ -132,6 +132,10 @@ pub const HotSprings = struct {
                     const known_record: KnownRecord = if (record == .Damaged) .Damaged else .Operational;
                     try possible_solution.append(known_record);
                 } else {
+                    // We get the last bit of the number and then test whether it's even or odd
+                    // For example, if we have 1454 - 0b10110101110, starting from the right:
+                    // 0 is even, then bit shift it to the 1, then 1, etc.
+                    // This is so we can use 0 through the permutation count to generate different, unique permutations.
                     const permutation_bit = i >> num_unknowns_encountered;
                     const permutation: KnownRecord = if (permutation_bit & 1 == 0) .Operational else .Damaged;
                     try possible_solution.append(permutation);
