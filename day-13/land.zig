@@ -18,8 +18,8 @@ pub const LandType = enum(u8) {
 
 pub const SymmetryType = enum { Horizontal, Vertical };
 
-pub const Symmetry = union(SymmetryType) {
-    focal_point: i8,
+pub const Symmetry = struct {
+    focal_point: u8,
     len: u8,
     type: SymmetryType,
 };
@@ -41,14 +41,14 @@ pub const Landscape = struct {
     }
 
     pub fn identifySymmetries(self: Landscape) !Symmetry {
-        if (try self.identifySymmetry(self.allocator, self.land, .Horizontal)) |sym| {
+        if (try Landscape.identifySymmetry(self.allocator, self.land, .Horizontal)) |sym| {
             return sym;
         }
 
         // Rotate matrix -90 degrees
         const rotated_land = try self.rotateLandLeft();
         defer self.free_land(rotated_land);
-        if (try self.identifySymmetry(self.allocator, rotated_land, .Vertical)) |sym| {
+        if (try Landscape.identifySymmetry(self.allocator, rotated_land, .Vertical)) |sym| {
             return sym;
         }
 
@@ -87,21 +87,22 @@ pub const Landscape = struct {
         defer candidates.deinit();
 
         for (1..land[0].len - 2) |i| {
-            const symmetry_length = identifySymmetryLength(land[0], i);
+            const symmetry_length = identifySymmetryLength(land[0], @intCast(i));
             if (symmetry_length > 0) {
-                const symmetry = Symmetry{ .focal_point = i, .len = symmetry_length, .type = direction };
+                const symmetry = Symmetry{ .focal_point = @intCast(i), .len = symmetry_length, .type = direction };
                 try candidates.append(symmetry);
             }
         }
 
         // Check that all candidates exist for every row.
-        var candidate_idx = 0;
-        outer_loop: while (true) {
+        var candidate_idx: u8 = 0;
+        outer_loop: while (candidate_idx < candidates.items.len) {
             const item = &candidates.items[candidate_idx];
             for (land) |row| {
+                // If the symmetry len is 0 then it means that there's no actual symmetry for that row.
                 const symmetry_len = identifySymmetryLength(row, item.focal_point);
                 if (symmetry_len == 0) {
-                    candidates.swapRemove(candidate_idx);
+                    _ = candidates.swapRemove(candidate_idx);
                     continue :outer_loop;
                 }
 
@@ -112,14 +113,12 @@ pub const Landscape = struct {
                 }
             }
 
-            if (candidates.items.len == 0) {
-                return null;
-            }
-
             candidate_idx += 1;
         }
 
-        if (candidates.items.len == 1) {
+        if (candidates.items.len == 0) {
+            return null;
+        } else if (candidates.items.len == 1) {
             return candidates.items[0];
         }
 
@@ -129,11 +128,11 @@ pub const Landscape = struct {
         for (candidates.items, 0..) |item, i| {
             if (item.len > max_len) {
                 max_len = item.len;
-                max_len_idx = i;
+                max_len_idx = @intCast(i);
             }
         }
 
-        return candidates[max_len_idx];
+        return candidates.items[max_len_idx];
     }
 
     fn identifySymmetryLength(data: []LandType, focal_point: u8) u8 {
@@ -143,7 +142,7 @@ pub const Landscape = struct {
 
         var len: u8 = 0;
         for (focal_point..data.len) |i| {
-            if (focal_point - i < 0) {
+            if (focal_point < i) {
                 break;
             }
             const item = data[i];
@@ -159,7 +158,7 @@ pub const Landscape = struct {
         return len;
     }
 
-    pub fn parse(data: []u8, allocator: std.mem.Allocator) ![]Landscape {
+    pub fn parse(allocator: std.mem.Allocator, data: []u8) ![]Landscape {
         var landscape_list = std.ArrayList(Landscape).init(allocator);
         defer landscape_list.deinit();
 

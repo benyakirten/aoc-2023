@@ -16,9 +16,12 @@ pub fn main() !void {
     const content = try input.readToEndAlloc(allocator, MAX_BUFFER_SIZE);
     defer allocator.free(content);
 
-    const landscapes = try Landscape.parse(content, allocator);
+    const landscapes = try Landscape.parse(allocator, content);
+
+    var total: usize = 0;
     for (landscapes) |landscape| {
-        landscape.print();
-        std.debug.print("\n", .{});
+        const symmetry = try landscape.identifySymmetries();
+        total += if (symmetry.type == .Horizontal) symmetry.focal_point else symmetry.focal_point * 100;
     }
+    std.debug.print("Total: {}\n", .{total});
 }
