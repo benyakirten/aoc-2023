@@ -44,16 +44,6 @@ pub const HotSprings = struct {
     positions: []u8,
     allocator: std.mem.Allocator,
 
-    const Arrangement = struct {
-        num_records: usize,
-        position_index: usize,
-        count: usize,
-
-        fn new() Arrangement {
-            return Arrangement{ .num_records = 0, .position_index = 0, .count = 0 };
-        }
-    };
-
     pub fn deinit(self: HotSprings) void {
         self.allocator.free(self.records);
         self.allocator.free(self.positions);
@@ -142,6 +132,10 @@ pub const HotSprings = struct {
                     const known_record: KnownRecord = if (record == .Damaged) .Damaged else .Operational;
                     try possible_solution.append(known_record);
                 } else {
+                    // We get the last bit of the number and then test whether it's even or odd
+                    // For example, if we have 1454 - 0b10110101110, starting from the right:
+                    // 0 is even, then bit shift it to the 1, then 1, etc.
+                    // This is so we can use 0 through the permutation count to generate different, unique permutations.
                     const permutation_bit = i >> num_unknowns_encountered;
                     const permutation: KnownRecord = if (permutation_bit & 1 == 0) .Operational else .Damaged;
                     try possible_solution.append(permutation);
@@ -184,11 +178,27 @@ pub const HotSprings = struct {
         return try hot_springs.dynamicPermute(Arrangement.new(), &cache);
     }
 
+    const Arrangement = struct {
+        // How far along we are in the line of hot springs (records)
+        num_records: usize,
+        // Which position we're looking at
+        position_index: usize,
+        // Number of damaged spaces we're counting
+        count: usize,
+
+        fn new() Arrangement {
+            return Arrangement{ .num_records = 0, .position_index = 0, .count = 0 };
+        }
+    };
+
     pub fn dynamicPermute(self: HotSprings, arrangement: Arrangement, cache: *std.AutoHashMap(Arrangement, usize)) !usize {
-        // Base case 1 -
+        // The base case always returns 1 or 0. We get to higher sums by adding up lots of 0s and 1s
+
+        // Base case - We've reached the end
         if (arrangement.num_records == self.records.len + 1) {
-            if (arrangement.position_index == self.positions.len) {
-                return if (arrangement.count == 0) 1 else 0;
+            // We should have no more positions left
+            if (arrangement.position_index == self.positions.len and arrangement.count == 0) {
+                return 1;
             }
             return 0;
         }
@@ -200,7 +210,9 @@ pub const HotSprings = struct {
 
         if (arrangement.num_records == self.records.len) {
             var count: usize = 0;
+            // We're at the end of the file
             if (arrangement.count > 0) {
+                // If the count is > 0 then we've arrived at the end of the group. Move onto the next (which will triger the base case).
                 if (arrangement.position_index < self.positions.len and self.positions[arrangement.position_index] == arrangement.count) {
                     count += try self.dynamicPermute(Arrangement{
                         .num_records = arrangement.num_records + 1,
@@ -209,6 +221,8 @@ pub const HotSprings = struct {
                     }, cache);
                 }
             } else {
+                // We don't need to manipulate anything to get to the base case - the current state will trigger
+                // it when we increase the num_records
                 count += try self.dynamicPermute(Arrangement{
                     .num_records = arrangement.num_records + 1,
                     .position_index = arrangement.position_index,
@@ -219,11 +233,15 @@ pub const HotSprings = struct {
             return count;
         }
 
+        // Now to the meat and potatoes
         var total: usize = 0;
         switch (self.records[arrangement.num_records]) {
             .Operational => {
                 if (arrangement.count > 0) {
                     // Move forward but also move forward the position
+                    // If the arrangement.count is > 0 then it means we're in the middle of a group
+                    // so if we hit it here, we are at the end of the group and move forward a position
+                    // and reset the current ocunt
                     if (arrangement.position_index < self.positions.len and self.positions[arrangement.position_index] == arrangement.count) {
                         total += try self.dynamicPermute(Arrangement{
                             .num_records = arrangement.num_records + 1,
@@ -232,30 +250,7 @@ pub const HotSprings = struct {
                         }, cache);
                     }
                 } else {
-                    // Move forward
-                    total += try self.dynamicPermute(Arrangement{
-                        .num_records = arrangement.num_records + 1,
-                        .position_index = arrangement.position_index,
-                        .count = arrangement.count,
-                    }, cache);
-                }
-            },
-            .Unknown => {
-                // Similar to above but we also increase the number
-                total += try self.dynamicPermute(Arrangement{
-                    .num_records = arrangement.num_records + 1,
-                    .position_index = arrangement.position_index,
-                    .count = arrangement.count + 1,
-                }, cache);
-                if (arrangement.count > 0) {
-                    if (arrangement.position_index < self.positions.len and self.positions[arrangement.position_index] == arrangement.count) {
-                        total += try self.dynamicPermute(Arrangement{
-                            .num_records = arrangement.num_records + 1,
-                            .position_index = arrangement.position_index + 1,
-                            .count = 0,
-                        }, cache);
-                    }
-                } else {
+                    // We move forward one
                     total += try self.dynamicPermute(Arrangement{
                         .num_records = arrangement.num_records + 1,
                         .position_index = arrangement.position_index,
@@ -264,11 +259,36 @@ pub const HotSprings = struct {
                 }
             },
             .Damaged => {
+                // We move forwardthe records but also the count
+                // we are building up
                 total += try self.dynamicPermute(Arrangement{
                     .num_records = arrangement.num_records + 1,
                     .position_index = arrangement.position_index,
                     .count = arrangement.count + 1,
                 }, cache);
+            },
+            .Unknown => {
+                // Effectively combining the outcomes of both.Operational and .Damaged
+                total += try self.dynamicPermute(Arrangement{
+                    .num_records = arrangement.num_records + 1,
+                    .position_index = arrangement.position_index,
+                    .count = arrangement.count + 1,
+                }, cache);
+                if (arrangement.count > 0) {
+                    if (arrangement.position_index < self.positions.len and self.positions[arrangement.position_index] == arrangement.count) {
+                        total += try self.dynamicPermute(Arrangement{
+                            .num_records = arrangement.num_records + 1,
+                            .position_index = arrangement.position_index + 1,
+                            .count = 0,
+                        }, cache);
+                    }
+                } else {
+                    total += try self.dynamicPermute(Arrangement{
+                        .num_records = arrangement.num_records + 1,
+                        .position_index = arrangement.position_index,
+                        .count = arrangement.count,
+                    }, cache);
+                }
             },
         }
 
