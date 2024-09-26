@@ -94,10 +94,11 @@ pub const Landscape = struct {
         var candidates = std.ArrayList(Symmetry).init(allocator);
         defer candidates.deinit();
 
+        // std.debug.print("\nIN {any} DIR\n", .{direction});
         for (0..land[0].len) |i| {
             var freebie_available = true;
             const symmetry_length = identifySymmetryLength(land[0], @intCast(i), &freebie_available);
-            if (symmetry_length > 0 and (symmetry_length + i == land[0].len or i - symmetry_length == 0)) {
+            if (symmetry_length > 0 and (symmetry_length + i == land[0].len or i == symmetry_length)) {
                 const symmetry = Symmetry{ .focal_point = @intCast(i), .len = symmetry_length, .type = direction, .freebie_available = freebie_available };
                 try candidates.append(symmetry);
             }
@@ -146,9 +147,21 @@ pub const Landscape = struct {
         }
 
         var len: u8 = 0;
-        while (len + focal_point - 1 < data.len and len <= focal_point) : (len += 1) {
-            const item = data[focal_point + len - 1];
-            const mirrored = data[focal_point - len];
+        // std.debug.print("\n", .{});
+        // for (data) |lt| {
+        //     std.debug.print("{c}", .{@intFromEnum(lt)});
+        // }
+        // std.debug.print("\n", .{});
+        while (len + focal_point < data.len and len <= focal_point - 1) : (len += 1) {
+            const item = data[focal_point + len];
+            const mirrored = data[focal_point - len - 1];
+            // std.debug.print("- {} - {} / {} - {c} v {c}\n", .{
+            //     focal_point,
+            //     focal_point - len,
+            //     focal_point + len + 1,
+            //     mirrored.toChar(),
+            //     item.toChar(),
+            // });
             if (item != mirrored) {
                 if (freebie_available.*) {
                     freebie_available.* = false;
@@ -156,10 +169,6 @@ pub const Landscape = struct {
                     break;
                 }
             }
-        }
-
-        if (len > 1) {
-            len -= 1;
         }
 
         return len;
