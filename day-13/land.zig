@@ -45,9 +45,10 @@ pub const Landscape = struct {
             return sym;
         }
 
-        // Rotate matrix -90 degrees
         const rotated_land = try self.rotateLandLeft();
         defer self.free_land(rotated_land);
+
+        // Rotate matrix -90 degrees
         if (try Landscape.identifySymmetry(self.allocator, rotated_land, .Vertical)) |sym| {
             return sym;
         }
@@ -88,7 +89,7 @@ pub const Landscape = struct {
 
         for (1..land[0].len - 2) |i| {
             const symmetry_length = identifySymmetryLength(land[0], @intCast(i));
-            if (symmetry_length > 0) {
+            if (symmetry_length > 0 and (symmetry_length + i == land[0].len or i - symmetry_length == 0)) {
                 const symmetry = Symmetry{ .focal_point = @intCast(i), .len = symmetry_length, .type = direction };
                 try candidates.append(symmetry);
             }
@@ -141,18 +142,16 @@ pub const Landscape = struct {
         }
 
         var len: u8 = 0;
-        for (focal_point..data.len) |i| {
-            if (focal_point < i) {
-                break;
-            }
-            const item = data[i];
-            const mirrored = data[focal_point - i];
-
+        while (len + focal_point - 1 < data.len and len <= focal_point) : (len += 1) {
+            const item = data[focal_point + len - 1];
+            const mirrored = data[focal_point - len];
             if (item != mirrored) {
                 break;
             }
+        }
 
-            len += 1;
+        if (len != 0) {
+            len -= 1;
         }
 
         return len;
@@ -172,6 +171,9 @@ pub const Landscape = struct {
         for (data, 0..) |letter, i| {
             if (i == data.len - 1 or (saw_line_break and letter == '\n')) {
                 if (i == data.len - 1) {
+                    const lt = try LandType.fromChar(letter);
+                    try line_list.append(lt);
+
                     const line = try line_list.toOwnedSlice();
                     try lines_list.append(line);
                 }

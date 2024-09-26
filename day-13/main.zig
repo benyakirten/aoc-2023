@@ -21,7 +21,7 @@ pub fn main() !void {
     var total: usize = 0;
     for (landscapes) |landscape| {
         const symmetry = try landscape.identifySymmetries();
-        total += if (symmetry.type == .Horizontal) symmetry.focal_point else symmetry.focal_point * 100;
+        total += if (symmetry.type == .Horizontal) symmetry.focal_point else @as(u16, symmetry.focal_point) * 100;
     }
     std.debug.print("Total: {}\n", .{total});
 }
