@@ -1,0 +1,53 @@
+const std = @import("std");
+
+pub const TerrainError = error{InvalidChar};
+
+pub const Terrain = enum(u8) {
+    RoundedRock = 'O',
+    CubeRock = '#',
+    EmptySpace = '.',
+
+    fn fromChar(value: u8) !Terrain {
+        switch (value) {
+            'O' => return Terrain.RoundedRock,
+            '#' => return Terrain.CubeRock,
+            '.' => return Terrain.EmptySpace,
+            else => return TerrainError.InvalidChar,
+        }
+    }
+};
+
+pub const Platform = struct {
+    area: [][]Terrain,
+    allocator: std.mem.Allocator,
+
+    pub fn parse(allocator: std.mem.Allocator, data: []u8) !Platform {
+        var num_cols: usize = 0;
+        while (data[num_cols] != '\n') : (num_cols += 1) {}
+
+        var rows = try std.ArrayList([]Terrain).initCapacity(allocator, data.len / num_cols);
+        defer rows.deinit();
+
+        var cols = try std.ArrayList(Terrain).initCapacity(allocator, num_cols);
+        defer cols.deinit();
+
+        for (data, 0..) |char, i| {
+            if (char == '\n' or i == data.len - 1) {
+                if (i == data.len - 1) {
+                    try cols.append(try Terrain.fromChar(char));
+                }
+
+                const col_slice = try cols.toOwnedSlice();
+                try rows.append(col_slice);
+                cols.clearAndFree();
+            } else {
+                try cols.append(try Terrain.fromChar(char));
+            }
+        }
+
+        return Platform{
+            .area = try rows.toOwnedSlice(),
+            .allocator = allocator,
+        };
+    }
+};
