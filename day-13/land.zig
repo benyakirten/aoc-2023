@@ -50,13 +50,12 @@ pub const Landscape = struct {
         const rotated_land = try self.rotateLandLeft();
         defer self.free_land(rotated_land);
 
-        const vertical_sym = try Landscape.identifySymmetry(self.allocator, rotated_land, .Vertical);
-        const horizontal_sym = try Landscape.identifySymmetry(self.allocator, self.land, .Horizontal);
+        if (try Landscape.identifySymmetry(self.allocator, rotated_land, .Vertical)) |sym| {
+            return sym;
+        }
 
-        if (vertical_sym != null and !vertical_sym.?.freebie_available) {
-            return vertical_sym.?;
-        } else if (horizontal_sym != null and !horizontal_sym.?.freebie_available) {
-            return horizontal_sym.?;
+        if (try Landscape.identifySymmetry(self.allocator, self.land, .Horizontal)) |sym| {
+            return sym;
         }
 
         self.print();
@@ -168,6 +167,7 @@ pub const Landscape = struct {
         defer line_list.deinit();
 
         var saw_line_break: bool = false;
+
         for (data, 0..) |letter, i| {
             if (i == data.len - 1 or (saw_line_break and letter == '\n')) {
                 if (i == data.len - 1) {
@@ -177,6 +177,7 @@ pub const Landscape = struct {
                     const line = try line_list.toOwnedSlice();
                     try lines_list.append(line);
                 }
+
                 const land = try lines_list.toOwnedSlice();
                 const landscape = Landscape{ .land = land, .allocator = allocator };
                 try landscape_list.append(landscape);
