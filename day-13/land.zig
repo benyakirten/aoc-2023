@@ -53,6 +53,10 @@ pub const Landscape = struct {
             return sym;
         }
 
+        std.debug.print("\nNORMAL:\n", .{});
+        self.print();
+        std.debug.print("\nROTATED:\n", .{});
+        Landscape.printLand(rotated_land);
         return LandscapeError.NoSymmetryFound;
     }
 
@@ -87,7 +91,7 @@ pub const Landscape = struct {
         var candidates = std.ArrayList(Symmetry).init(allocator);
         defer candidates.deinit();
 
-        for (1..land[0].len - 2) |i| {
+        for (0..land[0].len) |i| {
             const symmetry_length = identifySymmetryLength(land[0], @intCast(i));
             if (symmetry_length > 0 and (symmetry_length + i == land[0].len or i - symmetry_length == 0)) {
                 const symmetry = Symmetry{ .focal_point = @intCast(i), .len = symmetry_length, .type = direction };
@@ -137,7 +141,7 @@ pub const Landscape = struct {
     }
 
     fn identifySymmetryLength(data: []LandType, focal_point: u8) u8 {
-        if (focal_point == data.len - 1 or focal_point == 0) {
+        if (focal_point == data.len or focal_point == 0) {
             return 0;
         }
 
@@ -200,7 +204,11 @@ pub const Landscape = struct {
     }
 
     pub fn print(self: Landscape) void {
-        for (self.land) |line| {
+        Landscape.printLand(self.land);
+    }
+
+    fn printLand(land: [][]LandType) void {
+        for (land) |line| {
             for (line) |lt| {
                 std.debug.print("{c}", .{@intFromEnum(lt)});
             }
