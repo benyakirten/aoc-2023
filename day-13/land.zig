@@ -54,10 +54,8 @@ pub const Landscape = struct {
         const horizontal_sym = try Landscape.identifySymmetry(self.allocator, self.land, .Horizontal);
 
         if (vertical_sym != null and !vertical_sym.?.freebie_available) {
-            std.debug.print("{}\n", .{@as(u16, vertical_sym.?.focal_point) * 100});
             return vertical_sym.?;
         } else if (horizontal_sym != null and !horizontal_sym.?.freebie_available) {
-            std.debug.print("{}\n", .{horizontal_sym.?.focal_point});
             return horizontal_sym.?;
         }
 
@@ -97,11 +95,9 @@ pub const Landscape = struct {
         var candidates = std.ArrayList(Symmetry).init(allocator);
         defer candidates.deinit();
 
-        // std.debug.print("\nIN {any} DIR\n", .{direction});
         for (0..land[0].len) |i| {
             var freebie_available = true;
             const symmetry_length = identifySymmetryLength(land[0], @intCast(i), &freebie_available);
-            // std.debug.print("{} + {} = {}?\n", .{ symmetry_length, i, land[0].len });
             if (symmetry_length > 0 and (symmetry_length + i == land[0].len or i == symmetry_length)) {
                 const symmetry = Symmetry{ .focal_point = @intCast(i), .len = symmetry_length, .type = direction, .freebie_available = freebie_available };
                 try candidates.append(symmetry);
@@ -114,46 +110,29 @@ pub const Landscape = struct {
 
         // Check that all candidates exist for every row.
         var candidate_index: usize = 0;
-        var swapped_and_is_valid: bool = false;
 
-        // std.debug.print("\n***REMOVAL PHASE***\n", .{});
         outer_loop: while (candidate_index < candidates.items.len) {
-            swapped_and_is_valid = false;
             const item = &candidates.items[candidate_index];
-            const freebie_available = item.freebie_available == true;
             for (land[1..]) |row| {
                 // We want to make sure the symmetry is valid for all rows
                 // If its symmetry len isn't valid for all rows then it isn't valid
                 const symmetry_len = identifySymmetryLength(row, item.focal_point, &item.freebie_available);
-                if (freebie_available and !item.freebie_available) {
-                    swapped_and_is_valid = true;
-                }
                 if (symmetry_len != item.len) {
-                    // std.debug.print("ANALYZING ", .{});
-                    // for (row) |lt| {
-                    //     std.debug.print("{c}", .{lt.toChar()});
-                    // }
-                    // std.debug.print("\n", .{});
-                    // std.debug.print("REMOVED: {any}, new len {}\n", .{ item, symmetry_len });
-                    swapped_and_is_valid = false;
                     _ = candidates.swapRemove(candidate_index);
                     continue :outer_loop;
                 }
             }
-
-            if (swapped_and_is_valid) {
-                return item.*;
-            }
-
             // Return the first valid symmetry
             candidate_index += 1;
         }
 
-        if (candidates.items.len > 0) {
-            return candidates.items[0];
-        } else {
-            return null;
+        for (candidates.items) |item| {
+            if (!item.freebie_available) {
+                return item;
+            }
         }
+
+        return null;
     }
 
     fn identifySymmetryLength(data: []LandType, focal_point: u8, freebie_available: *bool) u8 {
@@ -162,21 +141,10 @@ pub const Landscape = struct {
         }
 
         var len: u8 = 0;
-        // std.debug.print("\n", .{});
-        // for (data) |lt| {
-        //     std.debug.print("{c}", .{@intFromEnum(lt)});
-        // }
-        // std.debug.print("\n", .{});
         while (len + focal_point < data.len and len <= focal_point - 1) : (len += 1) {
             const item = data[focal_point + len];
             const mirrored = data[focal_point - len - 1];
-            // std.debug.print("- {} - {} / {} - {c} v {c}\n", .{
-            //     focal_point,
-            //     focal_point - len,
-            //     focal_point + len + 1,
-            //     mirrored.toChar(),
-            //     item.toChar(),
-            // });
+
             if (item != mirrored) {
                 if (freebie_available.*) {
                     freebie_available.* = false;
