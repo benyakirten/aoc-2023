@@ -50,15 +50,18 @@ pub const Landscape = struct {
         const rotated_land = try self.rotateLandLeft();
         defer self.free_land(rotated_land);
 
-        if (try Landscape.identifySymmetry(self.allocator, rotated_land, .Vertical)) |sym| {
-            std.debug.print("{}\n", .{@as(u16, sym.focal_point) * 100});
-            return sym;
+        const vertical_sym = try Landscape.identifySymmetry(self.allocator, rotated_land, .Vertical);
+        const horizontal_sym = try Landscape.identifySymmetry(self.allocator, self.land, .Horizontal);
+
+        if (vertical_sym != null and !vertical_sym.?.freebie_available) {
+            std.debug.print("{}\n", .{@as(u16, vertical_sym.?.focal_point) * 100});
+            return vertical_sym.?;
+        } else if (horizontal_sym != null and !horizontal_sym.?.freebie_available) {
+            std.debug.print("{}\n", .{horizontal_sym.?.focal_point});
+            return horizontal_sym.?;
         }
 
-        if (try Landscape.identifySymmetry(self.allocator, self.land, .Horizontal)) |sym| {
-            std.debug.print("{}\n", .{@as(u16, sym.focal_point)});
-            return sym;
-        }
+        self.print();
 
         return LandscapeError.NoSymmetryFound;
     }
@@ -98,21 +101,27 @@ pub const Landscape = struct {
         for (0..land[0].len) |i| {
             var freebie_available = true;
             const symmetry_length = identifySymmetryLength(land[0], @intCast(i), &freebie_available);
+            // std.debug.print("{} + {} = {}?\n", .{ symmetry_length, i, land[0].len });
             if (symmetry_length > 0 and (symmetry_length + i == land[0].len or i == symmetry_length)) {
                 const symmetry = Symmetry{ .focal_point = @intCast(i), .len = symmetry_length, .type = direction, .freebie_available = freebie_available };
                 try candidates.append(symmetry);
             }
         }
 
+        if (candidates.items.len == 0) {
+            return null;
+        }
+
         // Check that all candidates exist for every row.
         var candidate_index: usize = 0;
         var swapped_and_is_valid: bool = false;
 
+        // std.debug.print("\n***REMOVAL PHASE***\n", .{});
         outer_loop: while (candidate_index < candidates.items.len) {
             swapped_and_is_valid = false;
             const item = &candidates.items[candidate_index];
             const freebie_available = item.freebie_available == true;
-            for (land) |row| {
+            for (land[1..]) |row| {
                 // We want to make sure the symmetry is valid for all rows
                 // If its symmetry len isn't valid for all rows then it isn't valid
                 const symmetry_len = identifySymmetryLength(row, item.focal_point, &item.freebie_available);
@@ -120,6 +129,12 @@ pub const Landscape = struct {
                     swapped_and_is_valid = true;
                 }
                 if (symmetry_len != item.len) {
+                    // std.debug.print("ANALYZING ", .{});
+                    // for (row) |lt| {
+                    //     std.debug.print("{c}", .{lt.toChar()});
+                    // }
+                    // std.debug.print("\n", .{});
+                    // std.debug.print("REMOVED: {any}, new len {}\n", .{ item, symmetry_len });
                     swapped_and_is_valid = false;
                     _ = candidates.swapRemove(candidate_index);
                     continue :outer_loop;
