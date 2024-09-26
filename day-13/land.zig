@@ -41,22 +41,18 @@ pub const Landscape = struct {
     }
 
     pub fn identifySymmetries(self: Landscape) !Symmetry {
-        if (try Landscape.identifySymmetry(self.allocator, self.land, .Horizontal)) |sym| {
-            return sym;
-        }
-
+        // Rotate matrix -90 degrees
         const rotated_land = try self.rotateLandLeft();
         defer self.free_land(rotated_land);
 
-        // Rotate matrix -90 degrees
         if (try Landscape.identifySymmetry(self.allocator, rotated_land, .Vertical)) |sym| {
             return sym;
         }
 
-        std.debug.print("\nNORMAL:\n", .{});
-        self.print();
-        std.debug.print("\nROTATED:\n", .{});
-        Landscape.printLand(rotated_land);
+        if (try Landscape.identifySymmetry(self.allocator, self.land, .Horizontal)) |sym| {
+            return sym;
+        }
+
         return LandscapeError.NoSymmetryFound;
     }
 
@@ -104,17 +100,12 @@ pub const Landscape = struct {
         outer_loop: while (candidate_idx < candidates.items.len) {
             const item = &candidates.items[candidate_idx];
             for (land) |row| {
-                // If the symmetry len is 0 then it means that there's no actual symmetry for that row.
+                // We want to make sure the symmetry is valid for all rows
+                // If its symmetry len isn't valid for all rows then it isn't valid
                 const symmetry_len = identifySymmetryLength(row, item.focal_point);
-                if (symmetry_len == 0) {
+                if (symmetry_len != item.len) {
                     _ = candidates.swapRemove(candidate_idx);
                     continue :outer_loop;
-                }
-
-                // Some rows may have longer symmetry around a focal point.
-                // We want the minimum length of symmetry that's valid for all rows.
-                if (symmetry_len < item.len) {
-                    item.len = symmetry_len;
                 }
             }
 
