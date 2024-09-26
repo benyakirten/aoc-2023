@@ -14,6 +14,10 @@ pub const LandType = enum(u8) {
             else => LandTypeError.UnrecognizedLandType,
         };
     }
+
+    fn toChar(self: LandType) u8 {
+        return @intFromEnum(self);
+    }
 };
 
 pub const SymmetryType = enum { Horizontal, Vertical };
@@ -22,6 +26,7 @@ pub const Symmetry = struct {
     focal_point: u8,
     len: u8,
     type: SymmetryType,
+    freebie_available: bool,
 };
 
 pub const LandscapeError = error{NoSymmetryFound};
@@ -46,10 +51,12 @@ pub const Landscape = struct {
         defer self.free_land(rotated_land);
 
         if (try Landscape.identifySymmetry(self.allocator, rotated_land, .Vertical)) |sym| {
+            std.debug.print("FINAL POINTS: {}\n", .{@as(u16, sym.focal_point * 100)});
             return sym;
         }
 
         if (try Landscape.identifySymmetry(self.allocator, self.land, .Horizontal)) |sym| {
+            std.debug.print("FINAL POINTS: {}\n", .{@as(u16, sym.focal_point)});
             return sym;
         }
 
@@ -87,51 +94,39 @@ pub const Landscape = struct {
         var candidates = std.ArrayList(Symmetry).init(allocator);
         defer candidates.deinit();
 
+        std.debug.print("NEW DIR {any}\n", .{direction});
         for (0..land[0].len) |i| {
-            const symmetry_length = identifySymmetryLength(land[0], @intCast(i));
+            var freebie_available = true;
+            const symmetry_length = identifySymmetryLength(land[0], @intCast(i), &freebie_available);
             if (symmetry_length > 0 and (symmetry_length + i == land[0].len or i - symmetry_length == 0)) {
-                const symmetry = Symmetry{ .focal_point = @intCast(i), .len = symmetry_length, .type = direction };
+                std.debug.print("FROM {} LEN {}\n", .{ i, symmetry_length });
+                const symmetry = Symmetry{ .focal_point = @intCast(i), .len = symmetry_length, .type = direction, .freebie_available = freebie_available };
                 try candidates.append(symmetry);
             }
         }
 
         // Check that all candidates exist for every row.
-        var candidate_idx: u8 = 0;
-        outer_loop: while (candidate_idx < candidates.items.len) {
-            const item = &candidates.items[candidate_idx];
+        outer_loop: while (candidates.items.len > 0) {
+            const item = &candidates.items[0];
             for (land) |row| {
                 // We want to make sure the symmetry is valid for all rows
                 // If its symmetry len isn't valid for all rows then it isn't valid
-                const symmetry_len = identifySymmetryLength(row, item.focal_point);
+                const symmetry_len = identifySymmetryLength(row, item.focal_point, &item.freebie_available);
                 if (symmetry_len != item.len) {
-                    _ = candidates.swapRemove(candidate_idx);
+                    std.debug.print("Removing {any}, new len: {}\n", .{ item, symmetry_len });
+                    _ = candidates.swapRemove(0);
                     continue :outer_loop;
                 }
             }
 
-            candidate_idx += 1;
+            // Return the first valid symmetry
+            return item.*;
         }
 
-        if (candidates.items.len == 0) {
-            return null;
-        } else if (candidates.items.len == 1) {
-            return candidates.items[0];
-        }
-
-        // Return the largest symmetry we find.
-        var max_len: u8 = 0;
-        var max_len_idx: u8 = 0;
-        for (candidates.items, 0..) |item, i| {
-            if (item.len > max_len) {
-                max_len = item.len;
-                max_len_idx = @intCast(i);
-            }
-        }
-
-        return candidates.items[max_len_idx];
+        return null;
     }
 
-    fn identifySymmetryLength(data: []LandType, focal_point: u8) u8 {
+    fn identifySymmetryLength(data: []LandType, focal_point: u8, freebie_available: *bool) u8 {
         if (focal_point == data.len or focal_point == 0) {
             return 0;
         }
@@ -141,11 +136,16 @@ pub const Landscape = struct {
             const item = data[focal_point + len - 1];
             const mirrored = data[focal_point - len];
             if (item != mirrored) {
-                break;
+                if (freebie_available.*) {
+                    std.debug.print("Using freebie on {} focal point, len {}: {c} vs {c}\n", .{ focal_point, len, item.toChar(), mirrored.toChar() });
+                    freebie_available.* = false;
+                } else {
+                    break;
+                }
             }
         }
 
-        if (len != 0) {
+        if (len > 1) {
             len -= 1;
         }
 
@@ -207,6 +207,10 @@ pub const Landscape = struct {
         }
     }
 };
+
+fn absDiff(comptime T: type, a: T, b: T) T {
+    return if (a > b) a - b else b - a;
+}
 
 test "Landscape.rotateLandLeft" {
     var col_1_arr = [4]LandType{ .Ash, .Rocks, .Ash, .Rocks };
