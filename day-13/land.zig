@@ -51,12 +51,12 @@ pub const Landscape = struct {
         defer self.free_land(rotated_land);
 
         if (try Landscape.identifySymmetry(self.allocator, rotated_land, .Vertical)) |sym| {
-            std.debug.print("FINAL POINTS: {}\n", .{@as(u16, sym.focal_point * 100)});
+            std.debug.print("{}\n", .{@as(u16, sym.focal_point) * 100});
             return sym;
         }
 
         if (try Landscape.identifySymmetry(self.allocator, self.land, .Horizontal)) |sym| {
-            std.debug.print("FINAL POINTS: {}\n", .{@as(u16, sym.focal_point)});
+            std.debug.print("{}\n", .{@as(u16, sym.focal_point)});
             return sym;
         }
 
@@ -94,36 +94,50 @@ pub const Landscape = struct {
         var candidates = std.ArrayList(Symmetry).init(allocator);
         defer candidates.deinit();
 
-        std.debug.print("NEW DIR {any}\n", .{direction});
         for (0..land[0].len) |i| {
             var freebie_available = true;
             const symmetry_length = identifySymmetryLength(land[0], @intCast(i), &freebie_available);
             if (symmetry_length > 0 and (symmetry_length + i == land[0].len or i - symmetry_length == 0)) {
-                std.debug.print("FROM {} LEN {}\n", .{ i, symmetry_length });
                 const symmetry = Symmetry{ .focal_point = @intCast(i), .len = symmetry_length, .type = direction, .freebie_available = freebie_available };
                 try candidates.append(symmetry);
             }
         }
 
         // Check that all candidates exist for every row.
-        outer_loop: while (candidates.items.len > 0) {
-            const item = &candidates.items[0];
+        var candidate_index: usize = 0;
+        var swapped_and_is_valid: bool = false;
+
+        outer_loop: while (candidate_index < candidates.items.len) {
+            swapped_and_is_valid = false;
+            const item = &candidates.items[candidate_index];
+            const freebie_available = item.freebie_available == true;
             for (land) |row| {
                 // We want to make sure the symmetry is valid for all rows
                 // If its symmetry len isn't valid for all rows then it isn't valid
                 const symmetry_len = identifySymmetryLength(row, item.focal_point, &item.freebie_available);
+                if (freebie_available and !item.freebie_available) {
+                    swapped_and_is_valid = true;
+                }
                 if (symmetry_len != item.len) {
-                    std.debug.print("Removing {any}, new len: {}\n", .{ item, symmetry_len });
-                    _ = candidates.swapRemove(0);
+                    swapped_and_is_valid = false;
+                    _ = candidates.swapRemove(candidate_index);
                     continue :outer_loop;
                 }
             }
 
+            if (swapped_and_is_valid) {
+                return item.*;
+            }
+
             // Return the first valid symmetry
-            return item.*;
+            candidate_index += 1;
         }
 
-        return null;
+        if (candidates.items.len > 0) {
+            return candidates.items[0];
+        } else {
+            return null;
+        }
     }
 
     fn identifySymmetryLength(data: []LandType, focal_point: u8, freebie_available: *bool) u8 {
@@ -137,7 +151,6 @@ pub const Landscape = struct {
             const mirrored = data[focal_point - len];
             if (item != mirrored) {
                 if (freebie_available.*) {
-                    std.debug.print("Using freebie on {} focal point, len {}: {c} vs {c}\n", .{ focal_point, len, item.toChar(), mirrored.toChar() });
                     freebie_available.* = false;
                 } else {
                     break;
