@@ -21,17 +21,97 @@ pub const Terrain = enum(u8) {
             std.debug.print("{c}", .{@intFromEnum(cell)});
         }
     }
+
+    fn toHashable(allocator: std.mem.Allocator, area: [][]Terrain) ![][]const u8 {
+        var rows = try std.ArrayList([]const u8).initCapacity(allocator, area.len);
+        defer rows.deinit();
+
+        var cols = try std.ArrayList(u8).initCapacity(allocator, area[0].len);
+        defer cols.deinit();
+
+        for (area) |row| {
+            for (row) |cell| {
+                try cols.append(@intFromEnum(cell));
+            }
+
+            const col_slice = try cols.toOwnedSlice();
+            try rows.append(col_slice);
+            cols.clearAndFree();
+        }
+
+        return try rows.toOwnedSlice();
+    }
 };
 
 pub const Platform = struct {
     area: [][]Terrain,
     allocator: std.mem.Allocator,
+    // For cycle detection
+    cache: std.HashMap([][]const u8, CachedData, TerrainContext, std.hash_map.default_max_load_percentage),
+
+    pub const Direction = enum {
+        North,
+        East,
+        South,
+        West,
+    };
+
+    pub const CachedData = struct {
+        direction: Direction,
+        num_reps: usize,
+    };
+
+    const TerrainContext = struct {
+        pub fn hash(_: TerrainContext, area: [][]const u8) u64 {
+            var h = std.hash.Fnv1a_64.init();
+            for (area) |row| {
+                h.update(row);
+            }
+
+            return h.final();
+        }
+
+        pub fn eql(_: TerrainContext, a: [][]const u8, b: [][]const u8) bool {
+            if (a.len != b.len) {
+                return false;
+            }
+
+            for (a, b) |row_a, row_b| {
+                if (row_a.len != row_b.len) {
+                    return false;
+                }
+
+                if (!std.mem.eql(Terrain, row_a, row_b)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    };
 
     pub fn deinit(self: Platform) void {
+        self.freeArea();
+        self.cache.deinit();
+    }
+
+    fn freeArea(self: Platform) void {
         for (self.area) |row| {
             self.allocator.free(row);
         }
         self.allocator.free(self.area);
+    }
+
+    pub fn getNorthLoad(self: Platform) usize {
+        var total: usize = 0;
+        for (self.area, 0..) |row, i| {
+            for (row) |cell| {
+                if (cell == .RoundedRock) {
+                    total += self.area.len - i;
+                }
+            }
+        }
+        return total;
     }
 
     pub fn parse(allocator: std.mem.Allocator, data: []u8) !Platform {
@@ -61,14 +141,28 @@ pub const Platform = struct {
         return Platform{
             .area = try rows.toOwnedSlice(),
             .allocator = allocator,
+            .cache = std.HashMap([][]const u8, CachedData, TerrainContext, std.hash_map.default_max_load_percentage).init(allocator),
         };
     }
 
-    pub fn tiltUp(self: *Platform) void {
-        for (1..self.area.len) |i| {
-            const row = &self.area[i];
-            for (0..row.len) |j| {
-                self.moveRocksUp(i, j);
+    pub fn print(self: Platform) void {
+        for (self.area) |row| {
+            Terrain.printRow(row);
+            std.debug.print("\n", .{});
+        }
+        std.debug.print("\n", .{});
+    }
+
+    pub fn tilt(self: *Platform, num_reps: usize) !void {
+        for (0..num_reps) |_| {
+            for (0..4) |_| {
+                for (self.area, 0..) |row, i| {
+                    for (row, 0..) |cell, j| {
+                        if (cell == .RoundedRock) {
+                            self.moveRocksUp(i, j);
+                        }
+                    }
+                }
             }
         }
     }
