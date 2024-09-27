@@ -17,22 +17,29 @@ pub fn main() !void {
     defer allocator.free(content);
 
     var platform = try Platform.parse(allocator, content);
-    std.debug.print("BEFORE\n", .{});
-    for (platform.area) |row| {
-        for (row) |cell| {
-            std.debug.print("{c}", .{@intFromEnum(cell)});
-        }
-        std.debug.print("\n", .{});
-    }
-
-    std.debug.print("\n", .{});
-
     platform.tiltUp();
-    std.debug.print("AFTER\n", .{});
-    for (platform.area) |row| {
+
+    var total: usize = 0;
+    for (platform.area, 0..) |row, i| {
         for (row) |cell| {
-            std.debug.print("{c}", .{@intFromEnum(cell)});
+            if (cell == .RoundedRock) {
+                total += platform.area.len - i;
+            }
         }
-        std.debug.print("\n", .{});
     }
+
+    std.debug.print("Total value: {}\n", .{total});
+}
+
+test "main functionality does not leak memory" {
+    const input = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer input.close();
+
+    const content = try input.readToEndAlloc(std.testing.allocator, MAX_BUFFER_SIZE);
+    defer std.testing.allocator.free(content);
+
+    var platform = try Platform.parse(std.testing.allocator, content);
+    platform.deinit();
+
+    try std.testing.expect(true);
 }

@@ -27,6 +27,13 @@ pub const Platform = struct {
     area: [][]Terrain,
     allocator: std.mem.Allocator,
 
+    pub fn deinit(self: Platform) void {
+        for (self.area) |row| {
+            self.allocator.free(row);
+        }
+        self.allocator.free(self.area);
+    }
+
     pub fn parse(allocator: std.mem.Allocator, data: []u8) !Platform {
         var num_cols: usize = 0;
         while (data[num_cols] != '\n') : (num_cols += 1) {}
