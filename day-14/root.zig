@@ -15,6 +15,12 @@ pub const Terrain = enum(u8) {
             else => return TerrainError.InvalidChar,
         }
     }
+
+    fn printRow(row: []Terrain) void {
+        for (row) |cell| {
+            std.debug.print("{c}", .{@intFromEnum(cell)});
+        }
+    }
 };
 
 pub const Platform = struct {
@@ -49,5 +55,37 @@ pub const Platform = struct {
             .area = try rows.toOwnedSlice(),
             .allocator = allocator,
         };
+    }
+
+    pub fn tiltUp(self: *Platform) void {
+        for (1..self.area.len) |i| {
+            const row = &self.area[i];
+            for (0..row.len) |j| {
+                self.moveRocksUp(i, j);
+            }
+        }
+    }
+
+    fn moveRocksUp(self: *Platform, row_num: usize, col_num: usize) void {
+        if (row_num == 0) {
+            return;
+        }
+
+        for (0..row_num) |i| {
+            const row_index = row_num - i;
+            const row = &self.area[row_index];
+            if (row.*[col_num] != .RoundedRock) {
+                return;
+            }
+
+            const previous_row = &self.area[row_index - 1];
+
+            if (previous_row.*[col_num] == .EmptySpace) {
+                previous_row.*[col_num] = .RoundedRock;
+                row.*[col_num] = .EmptySpace;
+            } else {
+                break;
+            }
+        }
     }
 };

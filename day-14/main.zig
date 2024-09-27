@@ -16,7 +16,19 @@ pub fn main() !void {
     const content = try input.readToEndAlloc(allocator, MAX_BUFFER_SIZE);
     defer allocator.free(content);
 
-    const platform = try Platform.parse(allocator, content);
+    var platform = try Platform.parse(allocator, content);
+    std.debug.print("BEFORE\n", .{});
+    for (platform.area) |row| {
+        for (row) |cell| {
+            std.debug.print("{c}", .{@intFromEnum(cell)});
+        }
+        std.debug.print("\n", .{});
+    }
+
+    std.debug.print("\n", .{});
+
+    platform.tiltUp();
+    std.debug.print("AFTER\n", .{});
     for (platform.area) |row| {
         for (row) |cell| {
             std.debug.print("{c}", .{@intFromEnum(cell)});
