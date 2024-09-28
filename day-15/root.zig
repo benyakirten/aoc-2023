@@ -41,7 +41,7 @@ pub const Instruction = struct {
 };
 
 pub const LensBoxes = struct {
-    boxes: []?std.ArrayListAligned(LensState),
+    boxes: []?std.ArrayList(LensState),
     allocator: std.mem.Allocator,
 
     pub fn deinit(self: LensBoxes) void {
@@ -61,12 +61,20 @@ pub const LensBoxes = struct {
         Remove: Removal,
         Insert: Insertion,
 
-        fn parseRemove(lens: []const u8, instruction_hash: u8) Operation {
-            return Operation.Remove{ .lens = lens, .hash = instruction_hash };
+        fn parseFocalLength(focal_length: []const u8) u8 {
+            var total: u8 = 0;
+            for (focal_length) |byte| {
+                total = total * 10 + byte - '0';
+            }
+            return total;
         }
 
-        fn parseInsertion(lens: []const u8, focal_length: u8, instruction_hash: u8) Operation {
-            return Operation.Insert{ .focal_length = focal_length, .lens = lens, .hash = instruction_hash };
+        fn parseRemove(lens: []const u8, instruction_hash: u8) Operation {
+            return Operation{ .Remove = Removal{ .lens = lens, .hash = instruction_hash } };
+        }
+
+        fn parseInsertion(lens: []const u8, focal_length: []const u8, instruction_hash: u8) Operation {
+            return Operation{ .Insert = Insertion{ .focal_length = Operation.parseFocalLength(focal_length), .lens = lens, .hash = instruction_hash } };
         }
     };
 
@@ -92,9 +100,9 @@ pub const LensBoxes = struct {
 
                 else => try lens_name.append(byte),
             }
-
-            return OperationError.MissingInstructionType;
         }
+
+        return OperationError.MissingInstructionType;
     }
 
     pub fn boxLenses(allocator: std.mem.Allocator, instructions: []Instruction) !LensBoxes {
@@ -105,26 +113,30 @@ pub const LensBoxes = struct {
             const operation = try parseOperation(allocator, instruction);
             switch (operation) {
                 .Insert => |op| {
-                    if (boxes[op.hash]) |box| {
-                        for (0..box.items.len) |i| {
-                            if (std.mem.eql(box.items[i].lens, op.lens)) {
-                                box.items[i].focal_length = op.focal_length;
-                                continue :instruction_loop;
-                            }
-                        }
-
-                        try box.append(LensState{ .lens = op.lens, .focal_length = op.focal_length });
-                    } else {
-                        const new_box = try std.ArrayList(LensState).init(allocator);
+                    var box = boxes[op.hash];
+                    if (box == null) {
+                        var new_box = std.ArrayList(LensState).init(allocator);
                         try new_box.append(LensState{ .lens = op.lens, .focal_length = op.focal_length });
                         boxes[op.hash] = new_box;
+                        continue :instruction_loop;
                     }
+
+                    for (0..box.?.items.len) |i| {
+                        if (std.mem.eql(u8, box.?.items[i].lens, op.lens)) {
+                            box.?.items[i].focal_length = op.focal_length;
+                            continue :instruction_loop;
+                        }
+                    }
+
+                    try box.?.append(LensState{ .lens = op.lens, .focal_length = op.focal_length });
                 },
+
                 .Remove => |op| {
-                    if (boxes[op.hash]) |box| {
-                        for (box.items, 0..) |item, i| {
-                            if (std.mem.eql(item.lens, op.lens)) {
-                                box.swapRemove(i);
+                    var box = boxes[op.hash];
+                    if (box != null) {
+                        for (box.?.items, 0..) |item, i| {
+                            if (std.mem.eql(u8, item.lens, op.lens)) {
+                                _ = box.?.swapRemove(i);
                                 break;
                             }
                         }
