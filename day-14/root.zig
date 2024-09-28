@@ -21,73 +21,21 @@ pub const Terrain = enum(u8) {
             std.debug.print("{c}", .{@intFromEnum(cell)});
         }
     }
-
-    fn toHashable(allocator: std.mem.Allocator, area: [][]Terrain) ![][]const u8 {
-        var rows = try std.ArrayList([]const u8).initCapacity(allocator, area.len);
-        defer rows.deinit();
-
-        var cols = try std.ArrayList(u8).initCapacity(allocator, area[0].len);
-        defer cols.deinit();
-
-        for (area) |row| {
-            for (row) |cell| {
-                try cols.append(@intFromEnum(cell));
-            }
-
-            const col_slice = try cols.toOwnedSlice();
-            try rows.append(col_slice);
-            cols.clearAndFree();
-        }
-
-        return try rows.toOwnedSlice();
-    }
 };
 
 pub const Platform = struct {
     area: [][]Terrain,
     allocator: std.mem.Allocator,
-    // For cycle detection
-    cache: std.HashMap([][]const u8, CachedData, TerrainContext, std.hash_map.default_max_load_percentage),
+    // For cycle detection - we store the score since it's unlikely to be the same for different setups
+    cache: std.AutoHashMap(usize, usize),
+
+    const DIRECTIONS = [4]Platform.Direction{ .North, .East, .South, .West };
 
     pub const Direction = enum {
         North,
         East,
         South,
         West,
-    };
-
-    pub const CachedData = struct {
-        direction: Direction,
-        num_reps: usize,
-    };
-
-    const TerrainContext = struct {
-        pub fn hash(_: TerrainContext, area: [][]const u8) u64 {
-            var h = std.hash.Fnv1a_64.init();
-            for (area) |row| {
-                h.update(row);
-            }
-
-            return h.final();
-        }
-
-        pub fn eql(_: TerrainContext, a: [][]const u8, b: [][]const u8) bool {
-            if (a.len != b.len) {
-                return false;
-            }
-
-            for (a, b) |row_a, row_b| {
-                if (row_a.len != row_b.len) {
-                    return false;
-                }
-
-                if (!std.mem.eql(Terrain, row_a, row_b)) {
-                    return false;
-                }
-            }
-
-            return true;
-        }
     };
 
     pub fn deinit(self: Platform) void {
@@ -102,7 +50,7 @@ pub const Platform = struct {
         self.allocator.free(self.area);
     }
 
-    pub fn getNorthLoad(self: Platform) usize {
+    pub fn getLoad(self: Platform) usize {
         var total: usize = 0;
         for (self.area, 0..) |row, i| {
             for (row) |cell| {
@@ -141,7 +89,7 @@ pub const Platform = struct {
         return Platform{
             .area = try rows.toOwnedSlice(),
             .allocator = allocator,
-            .cache = std.HashMap([][]const u8, CachedData, TerrainContext, std.hash_map.default_max_load_percentage).init(allocator),
+            .cache = std.AutoHashMap(usize, usize).init(allocator),
         };
     }
 
@@ -154,15 +102,95 @@ pub const Platform = struct {
     }
 
     pub fn tilt(self: *Platform, num_reps: usize) !void {
-        for (0..num_reps) |_| {
-            for (0..4) |_| {
+        for (0..num_reps) |cycle| {
+            for (DIRECTIONS) |direction| {
                 for (self.area, 0..) |row, i| {
                     for (row, 0..) |cell, j| {
                         if (cell == .RoundedRock) {
-                            self.moveRocksUp(i, j);
+                            switch (direction) {
+                                .North => self.moveRocksUp(i, j),
+                                .East => self.moveRocksRight(i, j),
+                                .South => self.moveRocksDown(i, j),
+                                .West => self.moveRocksLeft(i, j),
+                            }
                         }
                     }
                 }
+            }
+
+            const score = self.getLoad();
+            if (self.cache.get(score)) |last_detected| {
+                // Cycle detected
+                std.debug.print("Cycle detected at iteration {}, last detected at {}\n", .{ cycle, last_detected });
+            } else {
+                try self.cache.put(score, cycle);
+            }
+        }
+    }
+
+    fn moveRocksDown(self: *Platform, row_num: usize, col_num: usize) void {
+        if (row_num == 0) {
+            return;
+        }
+
+        for (0..row_num) |i| {
+            const row_index = row_num - i;
+            const row = &self.area[row_index];
+            if (row.*[col_num] != .RoundedRock) {
+                return;
+            }
+
+            const previous_row = &self.area[row_index - 1];
+
+            if (previous_row.*[col_num] == .EmptySpace) {
+                previous_row.*[col_num] = .RoundedRock;
+                row.*[col_num] = .EmptySpace;
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn moveRocksRight(self: *Platform, row_num: usize, col_num: usize) void {
+        if (row_num == 0) {
+            return;
+        }
+
+        for (0..row_num) |i| {
+            const row_index = row_num - i;
+            const row = &self.area[row_index];
+            if (row.*[col_num] != .RoundedRock) {
+                return;
+            }
+
+            const previous_row = &self.area[row_index - 1];
+
+            if (previous_row.*[col_num] == .EmptySpace) {
+                previous_row.*[col_num] = .RoundedRock;
+                row.*[col_num] = .EmptySpace;
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn moveRocksLeft(self: *Platform, row_num: usize, col_num: usize) void {
+        if (col_num == 0) {
+            return;
+        }
+
+        const row = &self.area[row_num];
+        for (0..col_num) |i| {
+            const col_index = col_num - i;
+            if (row.*[col_index] != .RoundedRock) {
+                return;
+            }
+
+            if (row.*[col_index - 1] == .EmptySpace) {
+                row.*[col_index - 1] = .RoundedRock;
+                row.*[col_index] = .EmptySpace;
+            } else {
+                break;
             }
         }
     }
@@ -190,3 +218,97 @@ pub const Platform = struct {
         }
     }
 };
+
+test "Platform.moveRocksLeft move on rock left" {
+    var row_arr = [_]Terrain{
+        .EmptySpace,
+        .EmptySpace,
+        .RoundedRock,
+        .RoundedRock,
+        .CubeRock,
+        .RoundedRock,
+        .EmptySpace,
+        .RoundedRock,
+        .CubeRock,
+        .EmptySpace,
+        .RoundedRock,
+    };
+    const row = row_arr[0..];
+    var area_arr = [_][]Terrain{
+        row,
+    };
+    const area = area_arr[0..];
+
+    var platform = Platform{
+        .area = area,
+        .allocator = std.testing.allocator,
+        .cache = std.AutoHashMap(usize, usize).init(std.testing.allocator),
+    };
+
+    platform.moveRocksLeft(0, 2);
+
+    var expected_arr = [_]Terrain{
+        .RoundedRock,
+        .EmptySpace,
+        .EmptySpace,
+        .RoundedRock,
+        .CubeRock,
+        .RoundedRock,
+        .EmptySpace,
+        .RoundedRock,
+        .CubeRock,
+        .EmptySpace,
+        .RoundedRock,
+    };
+    const expected = expected_arr[0..];
+
+    try std.testing.expectEqualDeep(platform.area[0], expected);
+}
+
+test "Platform.moveRocksLeft move all rocks left" {
+    var row_arr = [_]Terrain{
+        .EmptySpace,
+        .EmptySpace,
+        .RoundedRock,
+        .RoundedRock,
+        .CubeRock,
+        .RoundedRock,
+        .EmptySpace,
+        .RoundedRock,
+        .CubeRock,
+        .EmptySpace,
+        .RoundedRock,
+    };
+    const row = row_arr[0..];
+    var area_arr = [_][]Terrain{
+        row,
+    };
+    const area = area_arr[0..];
+
+    var platform = Platform{
+        .area = area,
+        .allocator = std.testing.allocator,
+        .cache = std.AutoHashMap(usize, usize).init(std.testing.allocator),
+    };
+
+    for (0..row_arr.len) |i| {
+        platform.moveRocksLeft(0, i);
+    }
+
+    var expected_arr = [_]Terrain{
+        .RoundedRock,
+        .RoundedRock,
+        .EmptySpace,
+        .EmptySpace,
+        .CubeRock,
+        .RoundedRock,
+        .RoundedRock,
+        .EmptySpace,
+        .CubeRock,
+        .RoundedRock,
+        .EmptySpace,
+    };
+    const expected = expected_arr[0..];
+
+    try std.testing.expectEqualDeep(platform.area[0], expected);
+}
