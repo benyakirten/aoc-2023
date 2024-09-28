@@ -20,7 +20,7 @@ pub fn main() !void {
     var platform = try Platform.parse(allocator, content);
     try platform.tilt(1);
 
-    std.debug.print("Total value: {}\n", .{platform.getNorthLoad()});
+    std.debug.print("Total value: {}\n", .{platform.getLoad()});
 }
 
 // test "main functionality does not leak memory" {

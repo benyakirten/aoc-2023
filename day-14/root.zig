@@ -16,7 +16,7 @@ pub const Terrain = enum(u8) {
         }
     }
 
-    fn printRow(row: []Terrain) void {
+    pub fn printRow(row: []Terrain) void {
         for (row) |cell| {
             std.debug.print("{c}", .{@intFromEnum(cell)});
         }
@@ -29,7 +29,12 @@ pub const Platform = struct {
     // For cycle detection - we store the score since it's unlikely to be the same for different setups
     cache: std.AutoHashMap(usize, usize),
 
-    const DIRECTIONS = [4]Platform.Direction{ .North, .East, .South, .West };
+    const DIRECTIONS = [4]Platform.Direction{
+        .North,
+        .West,
+        .South,
+        .East,
+    };
 
     pub const Direction = enum {
         North,
@@ -105,17 +110,17 @@ pub const Platform = struct {
         for (0..num_reps) |cycle| {
             for (DIRECTIONS) |direction| {
                 for (self.area, 0..) |row, i| {
-                    for (row, 0..) |cell, j| {
-                        if (cell == .RoundedRock) {
-                            switch (direction) {
-                                .North => self.moveRocksUp(i, j),
-                                .East => self.moveRocksRight(i, j),
-                                .South => self.moveRocksDown(i, j),
-                                .West => self.moveRocksLeft(i, j),
-                            }
+                    for (0..row.len) |j| {
+                        switch (direction) {
+                            .North => self.moveRocksNorth(i, j),
+                            .West => self.moveRocksWest(i, j),
+                            .South => self.moveRocksSouth(i, j),
+                            .East => self.moveRocksEast(i, j),
                         }
                     }
                 }
+                std.debug.print("DIRECTION: {}\n", .{direction});
+                self.print();
             }
 
             const score = self.getLoad();
@@ -128,30 +133,7 @@ pub const Platform = struct {
         }
     }
 
-    fn moveRocksDown(self: *Platform, row_num: usize, col_num: usize) void {
-        if (row_num == 0) {
-            return;
-        }
-
-        for (0..row_num) |i| {
-            const row_index = row_num - i;
-            const row = &self.area[row_index];
-            if (row.*[col_num] != .RoundedRock) {
-                return;
-            }
-
-            const previous_row = &self.area[row_index - 1];
-
-            if (previous_row.*[col_num] == .EmptySpace) {
-                previous_row.*[col_num] = .RoundedRock;
-                row.*[col_num] = .EmptySpace;
-            } else {
-                break;
-            }
-        }
-    }
-
-    fn moveRocksRight(self: *Platform, row_num: usize, col_num: usize) void {
+    fn moveRocksEast(self: *Platform, row_num: usize, col_num: usize) void {
         if (col_num == 0) {
             return;
         }
@@ -174,7 +156,7 @@ pub const Platform = struct {
         }
     }
 
-    fn moveRocksLeft(self: *Platform, row_num: usize, col_num: usize) void {
+    fn moveRocksWest(self: *Platform, row_num: usize, col_num: usize) void {
         if (col_num == 0) {
             return;
         }
@@ -195,7 +177,31 @@ pub const Platform = struct {
         }
     }
 
-    fn moveRocksUp(self: *Platform, row_num: usize, col_num: usize) void {
+    fn moveRocksSouth(self: *Platform, row_num: usize, col_num: usize) void {
+        if (row_num == 0) {
+            return;
+        }
+
+        const row_count = self.area.len;
+        for (0..row_num) |i| {
+            const row_index = row_count - (row_num - i);
+            const row = &self.area[row_index - 1];
+            if (row.*[col_num] != .RoundedRock) {
+                return;
+            }
+
+            const previous_row = &self.area[row_index];
+
+            if (previous_row.*[col_num] == .EmptySpace) {
+                previous_row.*[col_num] = .RoundedRock;
+                row.*[col_num] = .EmptySpace;
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn moveRocksNorth(self: *Platform, row_num: usize, col_num: usize) void {
         if (row_num == 0) {
             return;
         }
@@ -203,6 +209,7 @@ pub const Platform = struct {
         for (0..row_num) |i| {
             const row_index = row_num - i;
             const row = &self.area[row_index];
+
             if (row.*[col_num] != .RoundedRock) {
                 return;
             }
@@ -219,7 +226,7 @@ pub const Platform = struct {
     }
 };
 
-test "Platform.moveRocksLeft move one rock left from the start of the row" {
+test "Platform.moveRocksWest move one rock left from the start of the row" {
     var row_arr = [_]Terrain{
         .EmptySpace,
         .EmptySpace,
@@ -241,7 +248,7 @@ test "Platform.moveRocksLeft move one rock left from the start of the row" {
         .cache = std.AutoHashMap(usize, usize).init(std.testing.allocator),
     };
 
-    platform.moveRocksLeft(0, 2);
+    platform.moveRocksWest(0, 2);
 
     var expected_arr = [_]Terrain{
         .RoundedRock,
@@ -257,7 +264,7 @@ test "Platform.moveRocksLeft move one rock left from the start of the row" {
     try std.testing.expectEqualDeep(platform.area[0], expected);
 }
 
-test "Platform.moveRocksLeft move all rocks left" {
+test "Platform.moveRocksWest move all rocks left" {
     var row_arr = [_]Terrain{
         .EmptySpace,
         .EmptySpace,
@@ -284,7 +291,7 @@ test "Platform.moveRocksLeft move all rocks left" {
     };
 
     for (0..row_arr.len) |i| {
-        platform.moveRocksLeft(0, i);
+        platform.moveRocksWest(0, i);
     }
 
     var expected_arr = [_]Terrain{
@@ -305,7 +312,7 @@ test "Platform.moveRocksLeft move all rocks left" {
     try std.testing.expectEqualDeep(platform.area[0], expected);
 }
 
-test "Platform.moveRocksRight move one rock right from the end of the row" {
+test "Platform.moveRocksEast move one rock right from the end of the row" {
     var row_arr = [_]Terrain{
         .RoundedRock,
         .RoundedRock,
@@ -327,7 +334,7 @@ test "Platform.moveRocksRight move one rock right from the end of the row" {
         .cache = std.AutoHashMap(usize, usize).init(std.testing.allocator),
     };
 
-    platform.moveRocksRight(0, 1);
+    platform.moveRocksEast(0, 1);
 
     var expected_arr = [_]Terrain{
         .RoundedRock,
@@ -343,7 +350,7 @@ test "Platform.moveRocksRight move one rock right from the end of the row" {
     try std.testing.expectEqualDeep(platform.area[0], expected);
 }
 
-test "Platform.moveRocksRight move all rocks right" {
+test "Platform.moveRocksEast move all rocks right" {
     var row_arr = [_]Terrain{
         .RoundedRock,
         .RoundedRock,
@@ -370,7 +377,7 @@ test "Platform.moveRocksRight move all rocks right" {
     };
 
     for (0..row_arr.len) |i| {
-        platform.moveRocksRight(0, i);
+        platform.moveRocksEast(0, i);
     }
 
     var expected_arr = [_]Terrain{
