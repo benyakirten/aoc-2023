@@ -117,6 +117,8 @@ pub const LensBoxes = struct {
         instruction_loop: for (instructions) |instruction| {
             const operation = try parseOperation(allocator, instruction);
             std.debug.print("After \"{s}\":\n", .{instruction.value});
+            defer printBoxState(boxes);
+
             switch (operation) {
                 .Insert => |op| {
                     const hash = Instruction.hash(op.lens);
@@ -126,16 +128,12 @@ pub const LensBoxes = struct {
                         try new_box.append(LensState{ .lens = op.lens, .focal_length = op.focal_length });
                         boxes[hash] = new_box;
 
-                        printBoxState(boxes);
-
                         continue :instruction_loop;
                     }
 
                     for (0..box.?.items.len) |i| {
                         if (std.mem.eql(u8, box.?.items[i].lens, op.lens)) {
                             box.?.items[i].focal_length = op.focal_length;
-
-                            printBoxState(boxes);
 
                             continue :instruction_loop;
                         }
@@ -149,15 +147,13 @@ pub const LensBoxes = struct {
                     if (boxes[hash] != null) {
                         for (boxes[hash].?.items, 0..) |item, i| {
                             if (std.mem.eql(u8, item.lens, op.lens)) {
-                                _ = boxes[hash].?.swapRemove(i);
+                                _ = boxes[hash].?.orderedRemove(i);
                                 break;
                             }
                         }
                     }
                 },
             }
-
-            printBoxState(boxes);
         }
 
         return LensBoxes{ .boxes = boxes, .allocator = allocator };
