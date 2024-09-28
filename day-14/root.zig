@@ -21,13 +21,73 @@ pub const Terrain = enum(u8) {
             std.debug.print("{c}", .{@intFromEnum(cell)});
         }
     }
+
+    fn toHashable(allocator: std.mem.Allocator, area: [][]Terrain) ![]const u8 {
+        const buffer = try allocator.alloc(u8, area.len * area[0].len);
+        for (area, 0..) |row, i| {
+            for (row, 0..) |cell, j| {
+                buffer[j + i * row.len] = @intFromEnum(cell);
+            }
+        }
+
+        return buffer;
+    }
+
+    const TerrainContext = struct {
+        pub fn hash(_: TerrainContext, area: []const u8) u64 {
+            var h = std.hash.Fnv1a_64.init();
+            h.update(area);
+            return h.final();
+        }
+
+        pub fn eql(_: TerrainContext, a: []const u8, b: []const u8) bool {
+            return std.mem.eql(u8, a, b);
+        }
+    };
 };
+
+test "Terrain.toHashable" {
+    var row_1_arr = [_]Terrain{
+        .EmptySpace,
+        .EmptySpace,
+        .RoundedRock,
+        .RoundedRock,
+        .CubeRock,
+        .EmptySpace,
+        .RoundedRock,
+    };
+    const row_1 = row_1_arr[0..];
+
+    var row_2_arr = [_]Terrain{
+        .RoundedRock,
+        .RoundedRock,
+        .EmptySpace,
+        .CubeRock,
+        .EmptySpace,
+        .RoundedRock,
+        .EmptySpace,
+    };
+    const row_2 = row_2_arr[0..];
+
+    var area_arr = [_][]Terrain{
+        row_1,
+        row_2,
+    };
+    const area = area_arr[0..];
+
+    const buffer = try Terrain.toHashable(std.testing.allocator, area);
+    defer std.testing.allocator.free(buffer);
+
+    const expected_arr = "..OO#.OOO.#.O.";
+    const expected: []const u8 = expected_arr[0..];
+    try std.testing.expectEqualDeep(buffer, expected);
+}
 
 pub const Platform = struct {
     area: [][]Terrain,
     allocator: std.mem.Allocator,
     // For cycle detection - we store the score since it's unlikely to be the same for different setups
-    cache: std.AutoHashMap(usize, usize),
+    cache: std.HashMap([]const u8, usize, Terrain.TerrainContext, std.hash_map.default_max_load_percentage),
 
     const DIRECTIONS = [4]Platform.Direction{
         .North,
@@ -94,7 +154,7 @@ pub const Platform = struct {
         return Platform{
             .area = try rows.toOwnedSlice(),
             .allocator = allocator,
-            .cache = std.AutoHashMap(usize, usize).init(allocator),
+            .cache = std.HashMap([]const u8, usize, Terrain.TerrainContext, std.hash_map.default_max_load_percentage).init(allocator),
         };
     }
 
@@ -119,16 +179,14 @@ pub const Platform = struct {
                         }
                     }
                 }
-                std.debug.print("DIRECTION: {}\n", .{direction});
-                self.print();
             }
 
-            const score = self.getLoad();
-            if (self.cache.get(score)) |last_detected| {
+            const hashed_area = try Terrain.toHashable(self.allocator, self.area);
+            if (self.cache.get(hashed_area)) |last_detected| {
                 // Cycle detected
-                std.debug.print("Cycle detected at iteration {}, last detected at {}\n", .{ cycle, last_detected });
+                std.debug.print("Cycle detected at iteration {}, last detected at {}, total load {}\n", .{ cycle, last_detected, self.getLoad() });
             } else {
-                try self.cache.put(score, cycle);
+                try self.cache.put(hashed_area, cycle);
             }
         }
     }
@@ -245,7 +303,7 @@ test "Platform.moveRocksWest move one rock left from the start of the row" {
     var platform = Platform{
         .area = area,
         .allocator = std.testing.allocator,
-        .cache = std.AutoHashMap(usize, usize).init(std.testing.allocator),
+        .cache = std.HashMap([]const u8, usize, Terrain.TerrainContext, std.hash_map.default_max_load_percentage).init(std.testing.allocator),
     };
 
     platform.moveRocksWest(0, 2);
@@ -287,7 +345,7 @@ test "Platform.moveRocksWest move all rocks left" {
     var platform = Platform{
         .area = area,
         .allocator = std.testing.allocator,
-        .cache = std.AutoHashMap(usize, usize).init(std.testing.allocator),
+        .cache = std.HashMap([]const u8, usize, Terrain.TerrainContext, std.hash_map.default_max_load_percentage).init(std.testing.allocator),
     };
 
     for (0..row_arr.len) |i| {
@@ -331,7 +389,7 @@ test "Platform.moveRocksEast move one rock right from the end of the row" {
     var platform = Platform{
         .area = area,
         .allocator = std.testing.allocator,
-        .cache = std.AutoHashMap(usize, usize).init(std.testing.allocator),
+        .cache = std.HashMap([]const u8, usize, Terrain.TerrainContext, std.hash_map.default_max_load_percentage).init(std.testing.allocator),
     };
 
     platform.moveRocksEast(0, 1);
@@ -373,7 +431,7 @@ test "Platform.moveRocksEast move all rocks right" {
     var platform = Platform{
         .area = area,
         .allocator = std.testing.allocator,
-        .cache = std.AutoHashMap(usize, usize).init(std.testing.allocator),
+        .cache = std.HashMap([]const u8, usize, Terrain.TerrainContext, std.hash_map.default_max_load_percentage).init(std.testing.allocator),
     };
 
     for (0..row_arr.len) |i| {

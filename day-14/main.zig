@@ -18,9 +18,9 @@ pub fn main() !void {
     defer allocator.free(content);
 
     var platform = try Platform.parse(allocator, content);
-    try platform.tilt(1);
+    try platform.tilt(100);
 
-    std.debug.print("Total value: {}\n", .{platform.getLoad()});
+    std.debug.print("Total load: {}\n", .{platform.getLoad()});
 }
 
 // test "main functionality does not leak memory" {
