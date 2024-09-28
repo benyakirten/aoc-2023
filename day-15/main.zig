@@ -20,7 +20,7 @@ pub fn main() !void {
 
     var total: usize = 0;
     for (instructions) |instruction| {
-        total += instruction.sum();
+        total += instruction.hash();
     }
-    std.debug.print("Total: {}\n", .{total});
+    std.debug.print("Total hashes: {}\n", .{total});
 }
