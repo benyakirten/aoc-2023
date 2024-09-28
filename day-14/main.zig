@@ -23,15 +23,15 @@ pub fn main() !void {
     std.debug.print("Total load: {}\n", .{platform.getLoad()});
 }
 
-// test "main functionality does not leak memory" {
-//     const input = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
-//     defer input.close();
+test "main functionality does not leak memory" {
+    const input = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer input.close();
 
-//     const content = try input.readToEndAlloc(std.testing.allocator, MAX_BUFFER_SIZE);
-//     defer std.testing.allocator.free(content);
+    const content = try input.readToEndAlloc(std.testing.allocator, MAX_BUFFER_SIZE);
+    defer std.testing.allocator.free(content);
 
-//     var platform = try Platform.parse(std.testing.allocator, content);
-//     platform.deinit();
+    var platform = try Platform.parse(std.testing.allocator, content);
+    platform.deinit();
 
-//     try std.testing.expect(true);
-// }
+    try std.testing.expect(true);
+}

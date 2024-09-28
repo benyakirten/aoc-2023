@@ -102,16 +102,12 @@ pub const Platform = struct {
         West,
     };
 
-    pub fn deinit(self: Platform) void {
-        self.freeArea();
-        self.cache.deinit();
-    }
-
-    fn freeArea(self: Platform) void {
+    pub fn deinit(self: *Platform) void {
         for (self.area) |row| {
             self.allocator.free(row);
         }
         self.allocator.free(self.area);
+        self.cache.deinit();
     }
 
     pub fn getLoad(self: Platform) usize {
@@ -166,9 +162,8 @@ pub const Platform = struct {
     }
 
     pub fn tilt(self: *Platform, num_reps: usize) !void {
-        var first_cycle_detected: usize = 0;
-        for (0..num_reps) |cycle| {
-            std.debug.print("ITER {}\n", .{cycle});
+        var beginning_of_cycle: usize = 0;
+        for (0..num_reps) |iter| {
             for (DIRECTIONS) |direction| {
                 for (self.area, 0..) |row, i| {
                     for (0..row.len) |j| {
@@ -185,19 +180,25 @@ pub const Platform = struct {
             const hashed_area = try Terrain.toHashable(self.allocator, self.area);
 
             if (self.cache.get(hashed_area)) |last_detected| {
-                if (first_cycle_detected == 0) {
-                    first_cycle_detected = last_detected;
-                } else if (last_detected == first_cycle_detected) {
+                if (beginning_of_cycle == 0) {
+                    beginning_of_cycle = last_detected;
+                } else if (last_detected == beginning_of_cycle) {
                     // Identified a complete cycle
-                    // 1. See how many cycles remain
-                    // 2. Skip to the last iteration fo the cycle
-                    // 3. Perform the last few tilts to get there
-                    const remaining_cycles = num_reps - cycle;
-                    const cycle_diff = remaining_cycles % (cycle - first_cycle_detected);
-                    return self.tilt(cycle_diff - 1);
+                    // We want to fast forward however many complete cycles are left
+                    // Therefore:
+                    // 1. Calculate the remaining iterations
+                    // 2. Calculate the length of the complete cycle
+                    // 3. Calculate the number of iterations to fast forward
+                    const remaining_iters = num_reps - iter;
+                    const complete_cycle_len = iter - beginning_of_cycle;
+                    const iters_left_after_fast_forwarding = remaining_iters % complete_cycle_len;
+
+                    // Clear the cache so we don't try to fast forward again.
+                    self.cache.clearAndFree();
+                    return self.tilt(iters_left_after_fast_forwarding - 1);
                 }
             } else {
-                try self.cache.put(hashed_area, cycle);
+                try self.cache.put(hashed_area, iter);
             }
         }
     }
