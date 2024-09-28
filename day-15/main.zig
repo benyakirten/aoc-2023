@@ -18,6 +18,7 @@ pub fn main() !void {
     defer allocator.free(content);
 
     const instructions = try Instruction.parse(allocator, content);
+    defer allocator.free(instructions);
 
     var total: usize = 0;
     for (instructions) |instruction| {
@@ -29,4 +30,26 @@ pub fn main() !void {
     defer lens_boxes.deinit();
 
     std.debug.print("Total lens boxes: {}\n", .{lens_boxes.sum()});
+}
+
+test "main does not leak memory" {
+    const input = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
+    defer input.close();
+
+    const content = try input.readToEndAlloc(std.testing.allocator, MAX_BUFFER_SIZE);
+    defer std.testing.allocator.free(content);
+
+    const instructions = try Instruction.parse(std.testing.allocator, content);
+    defer std.testing.allocator.free(instructions);
+    defer for (instructions) |instruction| {
+        instruction.deinit();
+    };
+
+    var total: usize = 0;
+    for (instructions) |instruction| {
+        total += Instruction.hash(instruction.value);
+    }
+
+    const lens_boxes = try LensBoxes.boxLenses(std.testing.allocator, instructions);
+    defer lens_boxes.deinit();
 }

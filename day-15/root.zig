@@ -23,6 +23,8 @@ pub const Instruction = struct {
         defer commands.deinit();
 
         var command = std.ArrayList(u8).init(allocator);
+        defer command.deinit();
+
         for (data, 0..) |byte, i| {
             if (byte == ',' or i == data.len - 1) {
                 if (i == data.len - 1) {
@@ -30,7 +32,6 @@ pub const Instruction = struct {
                 }
                 const cmd = try command.toOwnedSlice();
                 try commands.append(Instruction{ .value = cmd, .allocator = allocator });
-                command.clearAndFree();
             } else {
                 try command.append(byte);
             }
@@ -53,13 +54,31 @@ pub const LensBoxes = struct {
         self.allocator.free(self.boxes);
     }
 
-    const Insertion = struct { focal_length: u8, lens: []const u8 };
-    const Removal = struct { lens: []const u8 };
+    const Insertion = struct {
+        focal_length: u8,
+        lens: []const u8,
+        allocator: std.mem.Allocator,
+    };
+    const Removal = struct {
+        lens: []const u8,
+        allocator: std.mem.Allocator,
+    };
 
     const OperationError = error{MissingInstructionType};
     const Operation = union(enum) {
         Remove: Removal,
         Insert: Insertion,
+
+        fn deinit(self: Operation) void {
+            switch (self) {
+                .Remove => |op| {
+                    op.allocator.free(op.lens);
+                },
+                .Insert => |op| {
+                    op.allocator.free(op.lens);
+                },
+            }
+        }
 
         fn parseFocalLength(focal_length: []const u8) u8 {
             var total: u8 = 0;
@@ -69,12 +88,16 @@ pub const LensBoxes = struct {
             return total;
         }
 
-        fn parseRemove(lens: []const u8) Operation {
-            return Operation{ .Remove = Removal{ .lens = lens } };
+        fn parseRemove(allocator: std.mem.Allocator, lens: []const u8) Operation {
+            return Operation{ .Remove = Removal{ .lens = lens, .allocator = allocator } };
         }
 
-        fn parseInsertion(lens: []const u8, focal_length: []const u8) Operation {
-            return Operation{ .Insert = Insertion{ .focal_length = Operation.parseFocalLength(focal_length), .lens = lens } };
+        fn parseInsertion(allocator: std.mem.Allocator, lens: []const u8, focal_length: []const u8) Operation {
+            return Operation{ .Insert = Insertion{
+                .focal_length = Operation.parseFocalLength(focal_length),
+                .lens = lens,
+                .allocator = allocator,
+            } };
         }
     };
 
@@ -90,6 +113,7 @@ pub const LensBoxes = struct {
                     const focal_length = instruction.value[i + 1 ..];
                     const lens = try lens_name.toOwnedSlice();
                     return Operation.parseInsertion(
+                        allocator,
                         lens,
                         focal_length,
                     );
@@ -97,6 +121,7 @@ pub const LensBoxes = struct {
                 '-' => {
                     const lens = try lens_name.toOwnedSlice();
                     return Operation.parseRemove(
+                        allocator,
                         lens,
                     );
                 },
@@ -114,8 +139,16 @@ pub const LensBoxes = struct {
             box.* = null;
         }
 
+        var operations = try std.ArrayList(Operation).initCapacity(allocator, instructions.len);
+        defer operations.deinit();
+        defer for (operations.items) |op| {
+            op.deinit();
+        };
+
         instruction_loop: for (instructions) |instruction| {
             const operation = try parseOperation(allocator, instruction);
+            try operations.append(operation);
+
             std.debug.print("After \"{s}\":\n", .{instruction.value});
             defer printBoxState(boxes);
 
