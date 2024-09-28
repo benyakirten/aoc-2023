@@ -152,22 +152,22 @@ pub const Platform = struct {
     }
 
     fn moveRocksRight(self: *Platform, row_num: usize, col_num: usize) void {
-        if (row_num == 0) {
+        if (col_num == 0) {
             return;
         }
 
-        for (0..row_num) |i| {
-            const row_index = row_num - i;
-            const row = &self.area[row_index];
-            if (row.*[col_num] != .RoundedRock) {
+        const row = &self.area[row_num];
+        const col_len = self.area[row_num].len;
+        for (0..col_num) |i| {
+            const col_index = col_len - (col_num - i);
+
+            if (row.*[col_index - 1] != .RoundedRock) {
                 return;
             }
 
-            const previous_row = &self.area[row_index - 1];
-
-            if (previous_row.*[col_num] == .EmptySpace) {
-                previous_row.*[col_num] = .RoundedRock;
-                row.*[col_num] = .EmptySpace;
+            if (row.*[col_index] == .EmptySpace) {
+                row.*[col_index] = .RoundedRock;
+                row.*[col_index - 1] = .EmptySpace;
             } else {
                 break;
             }
@@ -219,15 +219,11 @@ pub const Platform = struct {
     }
 };
 
-test "Platform.moveRocksLeft move on rock left" {
+test "Platform.moveRocksLeft move one rock left from the start of the row" {
     var row_arr = [_]Terrain{
         .EmptySpace,
         .EmptySpace,
         .RoundedRock,
-        .RoundedRock,
-        .CubeRock,
-        .RoundedRock,
-        .EmptySpace,
         .RoundedRock,
         .CubeRock,
         .EmptySpace,
@@ -250,10 +246,6 @@ test "Platform.moveRocksLeft move on rock left" {
     var expected_arr = [_]Terrain{
         .RoundedRock,
         .EmptySpace,
-        .EmptySpace,
-        .RoundedRock,
-        .CubeRock,
-        .RoundedRock,
         .EmptySpace,
         .RoundedRock,
         .CubeRock,
@@ -307,6 +299,92 @@ test "Platform.moveRocksLeft move all rocks left" {
         .CubeRock,
         .RoundedRock,
         .EmptySpace,
+    };
+    const expected = expected_arr[0..];
+
+    try std.testing.expectEqualDeep(platform.area[0], expected);
+}
+
+test "Platform.moveRocksRight move one rock right from the end of the row" {
+    var row_arr = [_]Terrain{
+        .RoundedRock,
+        .RoundedRock,
+        .EmptySpace,
+        .EmptySpace,
+        .CubeRock,
+        .RoundedRock,
+        .EmptySpace,
+    };
+    const row = row_arr[0..];
+    var area_arr = [_][]Terrain{
+        row,
+    };
+    const area = area_arr[0..];
+
+    var platform = Platform{
+        .area = area,
+        .allocator = std.testing.allocator,
+        .cache = std.AutoHashMap(usize, usize).init(std.testing.allocator),
+    };
+
+    platform.moveRocksRight(0, 1);
+
+    var expected_arr = [_]Terrain{
+        .RoundedRock,
+        .RoundedRock,
+        .EmptySpace,
+        .EmptySpace,
+        .CubeRock,
+        .EmptySpace,
+        .RoundedRock,
+    };
+    const expected = expected_arr[0..];
+
+    try std.testing.expectEqualDeep(platform.area[0], expected);
+}
+
+test "Platform.moveRocksRight move all rocks right" {
+    var row_arr = [_]Terrain{
+        .RoundedRock,
+        .RoundedRock,
+        .EmptySpace,
+        .EmptySpace,
+        .CubeRock,
+        .RoundedRock,
+        .RoundedRock,
+        .EmptySpace,
+        .CubeRock,
+        .RoundedRock,
+        .EmptySpace,
+    };
+    const row = row_arr[0..];
+    var area_arr = [_][]Terrain{
+        row,
+    };
+    const area = area_arr[0..];
+
+    var platform = Platform{
+        .area = area,
+        .allocator = std.testing.allocator,
+        .cache = std.AutoHashMap(usize, usize).init(std.testing.allocator),
+    };
+
+    for (0..row_arr.len) |i| {
+        platform.moveRocksRight(0, i);
+    }
+
+    var expected_arr = [_]Terrain{
+        .EmptySpace,
+        .EmptySpace,
+        .RoundedRock,
+        .RoundedRock,
+        .CubeRock,
+        .EmptySpace,
+        .RoundedRock,
+        .RoundedRock,
+        .CubeRock,
+        .EmptySpace,
+        .RoundedRock,
     };
     const expected = expected_arr[0..];
 
