@@ -21,7 +21,7 @@ pub fn main() !void {
 
     var total: usize = 0;
     for (instructions) |instruction| {
-        total += instruction.hash();
+        total += Instruction.hash(instruction.value);
     }
     std.debug.print("Total instruction hashes: {}\n", .{total});
 

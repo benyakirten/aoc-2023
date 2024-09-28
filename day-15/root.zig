@@ -8,9 +8,9 @@ pub const Instruction = struct {
         self.allocator.free(self.value);
     }
 
-    pub fn hash(self: Instruction) usize {
+    pub fn hash(data: []const u8) usize {
         var total: usize = 0;
-        for (self.value) |byte| {
+        for (data) |byte| {
             total += byte;
             total *= 17;
             total %= 256;
@@ -53,8 +53,8 @@ pub const LensBoxes = struct {
         self.allocator.free(self.boxes);
     }
 
-    const Insertion = struct { focal_length: u8, lens: []const u8, hash: u8 };
-    const Removal = struct { lens: []const u8, hash: u8 };
+    const Insertion = struct { focal_length: u8, lens: []const u8 };
+    const Removal = struct { lens: []const u8 };
 
     const OperationError = error{MissingInstructionType};
     const Operation = union(enum) {
@@ -69,12 +69,12 @@ pub const LensBoxes = struct {
             return total;
         }
 
-        fn parseRemove(lens: []const u8, instruction_hash: u8) Operation {
-            return Operation{ .Remove = Removal{ .lens = lens, .hash = instruction_hash } };
+        fn parseRemove(lens: []const u8) Operation {
+            return Operation{ .Remove = Removal{ .lens = lens } };
         }
 
-        fn parseInsertion(lens: []const u8, focal_length: []const u8, instruction_hash: u8) Operation {
-            return Operation{ .Insert = Insertion{ .focal_length = Operation.parseFocalLength(focal_length), .lens = lens, .hash = instruction_hash } };
+        fn parseInsertion(lens: []const u8, focal_length: []const u8) Operation {
+            return Operation{ .Insert = Insertion{ .focal_length = Operation.parseFocalLength(focal_length), .lens = lens } };
         }
     };
 
@@ -89,13 +89,16 @@ pub const LensBoxes = struct {
                 '=' => {
                     const focal_length = instruction.value[i + 1 ..];
                     const lens = try lens_name.toOwnedSlice();
-                    const instruction_hash = @as(u8, @intCast(instruction.hash()));
-                    return Operation.parseInsertion(lens, focal_length, instruction_hash);
+                    return Operation.parseInsertion(
+                        lens,
+                        focal_length,
+                    );
                 },
                 '-' => {
                     const lens = try lens_name.toOwnedSlice();
-                    const instruction_hash = @as(u8, @intCast(instruction.hash()));
-                    return Operation.parseRemove(lens, instruction_hash);
+                    return Operation.parseRemove(
+                        lens,
+                    );
                 },
 
                 else => try lens_name.append(byte),
@@ -107,17 +110,20 @@ pub const LensBoxes = struct {
 
     pub fn boxLenses(allocator: std.mem.Allocator, instructions: []Instruction) !LensBoxes {
         const boxes = try allocator.alloc(?std.ArrayList(LensState), 256);
-        defer allocator.free(boxes);
+        for (boxes) |*box| {
+            box.* = null;
+        }
 
         instruction_loop: for (instructions) |instruction| {
             const operation = try parseOperation(allocator, instruction);
             switch (operation) {
                 .Insert => |op| {
-                    var box = boxes[op.hash];
+                    const hash = Instruction.hash(op.lens);
+                    var box = boxes[hash];
                     if (box == null) {
                         var new_box = std.ArrayList(LensState).init(allocator);
                         try new_box.append(LensState{ .lens = op.lens, .focal_length = op.focal_length });
-                        boxes[op.hash] = new_box;
+                        boxes[hash] = new_box;
                         continue :instruction_loop;
                     }
 
@@ -132,7 +138,8 @@ pub const LensBoxes = struct {
                 },
 
                 .Remove => |op| {
-                    var box = boxes[op.hash];
+                    const hash = Instruction.hash(op.lens);
+                    var box = boxes[hash];
                     if (box != null) {
                         for (box.?.items, 0..) |item, i| {
                             if (std.mem.eql(u8, item.lens, op.lens)) {
@@ -143,9 +150,24 @@ pub const LensBoxes = struct {
                     }
                 },
             }
+
+            std.debug.print("After \"{s}\":\n", .{instruction.value});
+            printBoxState(boxes);
+            std.debug.print("\n", .{});
         }
 
         return LensBoxes{ .boxes = boxes, .allocator = allocator };
+    }
+
+    fn printBoxState(boxes: []?std.ArrayList(LensState)) void {
+        for (0..boxes.len) |i| {
+            if (boxes[i]) |box| {
+                std.debug.print("Box {}: ", .{i});
+                for (box.items) |item| {
+                    std.debug.print(" [{s} {}]\n", .{ item.lens, item.focal_length });
+                }
+            }
+        }
     }
 
     pub fn sum(self: LensBoxes) usize {
@@ -168,6 +190,6 @@ test "Instruction.hash" {
 
     const instruction = Instruction{ .allocator = std.testing.allocator, .value = data };
 
-    const got = instruction.hash();
+    const got = Instruction.hash(instruction.value);
     try std.testing.expectEqual(52, got);
 }
