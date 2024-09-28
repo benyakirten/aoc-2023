@@ -98,36 +98,35 @@ pub const LensBoxes = struct {
     }
 
     pub fn boxLenses(allocator: std.mem.Allocator, instructions: []Instruction) !LensBoxes {
-        const boxes = try allocator.alloc(std.ArrayList(LensState), 256);
+        const boxes = try allocator.alloc(?std.ArrayList(LensState), 256);
         defer allocator.free(boxes);
 
         instruction_loop: for (instructions) |instruction| {
             const operation = try parseOperation(allocator, instruction);
             switch (operation) {
                 .Insert => |op| {
-                    const box = boxes[op.hash];
-                    if (box == null) {
+                    if (boxes[op.hash]) |box| {
+                        for (0..box.items.len) |i| {
+                            if (std.mem.eql(box.items[i].lens, op.lens)) {
+                                box.items[i].focal_length = op.focal_length;
+                                continue :instruction_loop;
+                            }
+                        }
+
+                        try box.append(LensState{ .lens = op.lens, .focal_length = op.focal_length });
+                    } else {
                         const new_box = try std.ArrayList(LensState).init(allocator);
                         try new_box.append(LensState{ .lens = op.lens, .focal_length = op.focal_length });
                         boxes[op.hash] = new_box;
-                        continue :instruction_loop;
                     }
-
-                    for (0..box.items.len) |i| {
-                        if (std.mem.eql(box.items[i].lens, op.lens)) {
-                            box.items[i].focal_length = op.focal_length;
-                            continue :instruction_loop;
-                        }
-                    }
-
-                    try box.append(LensState{ .lens = op.lens, .focal_length = op.focal_length });
                 },
                 .Remove => |op| {
-                    const box = boxes[op.hash];
-                    for (0..box.items.len) |i| {
-                        if (std.mem.eql(box.items[i].lens, op.lens)) {
-                            box.swapRemove(i);
-                            break;
+                    if (boxes[op.hash]) |box| {
+                        for (box.items, 0..) |item, i| {
+                            if (std.mem.eql(item.lens, op.lens)) {
+                                box.swapRemove(i);
+                                break;
+                            }
                         }
                     }
                 },
