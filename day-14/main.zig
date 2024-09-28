@@ -18,7 +18,7 @@ pub fn main() !void {
     defer allocator.free(content);
 
     var platform = try Platform.parse(allocator, content);
-    try platform.tilt(100);
+    try platform.tilt(NUM_CYCLES);
 
     std.debug.print("Total load: {}\n", .{platform.getLoad()});
 }

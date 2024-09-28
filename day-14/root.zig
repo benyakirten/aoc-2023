@@ -86,7 +86,6 @@ test "Terrain.toHashable" {
 pub const Platform = struct {
     area: [][]Terrain,
     allocator: std.mem.Allocator,
-    // For cycle detection - we store the score since it's unlikely to be the same for different setups
     cache: std.HashMap([]const u8, usize, Terrain.TerrainContext, std.hash_map.default_max_load_percentage),
 
     const DIRECTIONS = [4]Platform.Direction{
@@ -167,7 +166,9 @@ pub const Platform = struct {
     }
 
     pub fn tilt(self: *Platform, num_reps: usize) !void {
+        var first_cycle_detected: usize = 0;
         for (0..num_reps) |cycle| {
+            std.debug.print("ITER {}\n", .{cycle});
             for (DIRECTIONS) |direction| {
                 for (self.area, 0..) |row, i| {
                     for (0..row.len) |j| {
@@ -182,9 +183,19 @@ pub const Platform = struct {
             }
 
             const hashed_area = try Terrain.toHashable(self.allocator, self.area);
+
             if (self.cache.get(hashed_area)) |last_detected| {
-                // Cycle detected
-                std.debug.print("Cycle detected at iteration {}, last detected at {}, total load {}\n", .{ cycle, last_detected, self.getLoad() });
+                if (first_cycle_detected == 0) {
+                    first_cycle_detected = last_detected;
+                } else if (last_detected == first_cycle_detected) {
+                    // Identified a complete cycle
+                    // 1. See how many cycles remain
+                    // 2. Skip to the last iteration fo the cycle
+                    // 3. Perform the last few tilts to get there
+                    const remaining_cycles = num_reps - cycle;
+                    const cycle_diff = remaining_cycles % (cycle - first_cycle_detected);
+                    return self.tilt(cycle_diff - 1);
+                }
             } else {
                 try self.cache.put(hashed_area, cycle);
             }
