@@ -264,7 +264,8 @@ pub const Contraptions = struct {
     area: [][]Tile,
     // If we have already resolved a certain path then we cache the result
     // Maybe whenever a light ray encounters something that changes its path
-    // It's added to the cache
+    // It's added to the cache.
+    // NOTE: Without caching, this ran in 5.5s
     cache: std.AutoArrayHashMap(Contraption.CacheKey, CacheValue),
     contraptions: []Contraption,
     allocator: std.mem.Allocator,
@@ -275,7 +276,7 @@ pub const Contraptions = struct {
         lit_areas: []Contraption.CacheKey,
     };
 
-    pub fn parseToPermutations(allocator: std.mem.Allocator, data: []const u8) ![]Contraption {
+    pub fn parseToPermutations(allocator: std.mem.Allocator, data: []const u8) !Contraptions {
         var contraption_list = std.ArrayList(Contraption).init(allocator);
         defer contraption_list.deinit();
 
@@ -425,5 +426,23 @@ pub const Contraptions = struct {
         const lit_areas = std.AutoArrayHashMap(Contraption.CacheKey, bool).init(allocator);
 
         return Contraption{ .area = area, .rays = try rays.toOwnedSlice(), .lit_areas = lit_areas, .allocator = allocator };
+    }
+
+    pub fn run(self: *Contraptions) !void {
+        for (self.contraptions) |*contraption| {
+            while (try contraption.tick()) {}
+        }
+    }
+
+    pub fn find_max_lit_areas(self: Contraptions) !usize {
+        var max_lit_areas: usize = 0;
+        for (self.contraptions) |contraption| {
+            const lit_areas = try contraption.count_lit_areas();
+            if (lit_areas > max_lit_areas) {
+                max_lit_areas = lit_areas;
+            }
+        }
+
+        return max_lit_areas;
     }
 };
