@@ -10,7 +10,7 @@ pub fn main() !void {
 
     const allocator = arena.allocator();
 
-    const input = try std.fs.cwd().openFile("puzzle_input.txt", .{ .mode = .read_only });
+    const input = try std.fs.cwd().openFile("test_input.txt", .{ .mode = .read_only });
     defer input.close();
 
     const content = try input.readToEndAlloc(allocator, MAX_BUFFER_SIZE);

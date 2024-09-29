@@ -71,8 +71,8 @@ pub const LightRay = struct {
                 const next_direction: LightDirection = switch (self.direction) {
                     .Up => .Right,
                     .Down => .Left,
-                    .Left => .Up,
-                    .Right => .Down,
+                    .Left => .Down,
+                    .Right => .Up,
                 };
 
                 const next_ray = LightRay.new(next_direction, next_coord.x, next_coord.y);
@@ -82,8 +82,8 @@ pub const LightRay = struct {
                 const next_direction: LightDirection = switch (self.direction) {
                     .Up => .Left,
                     .Down => .Right,
-                    .Left => .Down,
-                    .Right => .Up,
+                    .Left => .Up,
+                    .Right => .Down,
                 };
 
                 const next_ray = LightRay.new(next_direction, next_coord.x, next_coord.y);
@@ -121,7 +121,7 @@ pub const LightRay = struct {
 
 pub const Contraption = struct {
     area: [][]Tile,
-    lit_areas: std.AutoArrayHashMap(Coordinate, bool),
+    lit_areas: std.AutoArrayHashMap(Coordinate, LightDirection),
     rays: []LightRay,
     allocator: std.mem.Allocator,
 
@@ -164,7 +164,7 @@ pub const Contraption = struct {
         try rays.append(starting_light_ray);
         defer rays.deinit();
 
-        const lit_areas = std.AutoArrayHashMap(Coordinate, bool).init(allocator);
+        const lit_areas = std.AutoArrayHashMap(Coordinate, LightDirection).init(allocator);
 
         return Contraption{ .area = area, .rays = try rays.toOwnedSlice(), .lit_areas = lit_areas, .allocator = allocator };
     }
@@ -178,7 +178,13 @@ pub const Contraption = struct {
         defer new_rays.deinit();
 
         for (self.rays) |ray| {
-            try self.lit_areas.put(ray.coord, true);
+            if (self.lit_areas.get(ray.coord)) |dir| {
+                if (dir == ray.direction) {
+                    continue;
+                }
+            }
+
+            try self.lit_areas.put(ray.coord, ray.direction);
             const addl_rays = try ray.advance(self.allocator, self.area);
             try new_rays.appendSlice(addl_rays);
         }
