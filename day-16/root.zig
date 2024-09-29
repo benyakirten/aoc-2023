@@ -32,7 +32,7 @@ pub const LightRay = struct {
         return LightRay{ .direction = direction, .coord = coord };
     }
 
-    fn advance(self: LightRay, allocator: std.mem.Allocator, area: [][]Tile, cache: *std.AutoArrayHashMap(Coordinate, LightDirection)) ![]LightRay {
+    fn advance(self: LightRay, allocator: std.mem.Allocator, area: [][]Tile, cache: *std.AutoArrayHashMap(Contraption.CacheKey, bool)) ![]LightRay {
         var light_ray_list = try std.ArrayList(LightRay).initCapacity(allocator, 2);
         defer light_ray_list.deinit();
 
@@ -62,134 +62,15 @@ pub const LightRay = struct {
 
         const next_tile = area[final_y][final_x];
         const next_coord = Coordinate{ .x = @as(usize, @intCast(final_x)), .y = @as(usize, @intCast(final_y)) };
-        switch (next_tile) {
-            .Empty => {
-                var add_next_ray: bool = true;
-                if (cache.get(next_coord)) |dir| {
-                    if (dir == self.direction) {
-                        add_next_ray = false;
-                    }
-                }
+        const directions = try Contraption.determineNextDirection(allocator, next_tile, self.direction);
 
-                if (add_next_ray) {
-                    const next_ray = LightRay.new(self.direction, next_coord.x, next_coord.y);
-                    try light_ray_list.append(next_ray);
-                }
-            },
-            .LeftMirror => {
-                const next_direction: LightDirection = switch (self.direction) {
-                    .Up => .Right,
-                    .Down => .Left,
-                    .Left => .Down,
-                    .Right => .Up,
-                };
+        for (directions) |dir| {
+            const cache_key = Contraption.CacheKey{ .coord = next_coord, .direction = dir };
+            if (cache.get(cache_key)) |_| {
+                continue;
+            }
 
-                var add_next_ray: bool = true;
-                if (cache.get(next_coord)) |dir| {
-                    if (dir == next_direction) {
-                        add_next_ray = false;
-                    }
-                }
-
-                if (add_next_ray) {
-                    const next_ray = LightRay.new(next_direction, next_coord.x, next_coord.y);
-                    try light_ray_list.append(next_ray);
-                }
-            },
-            .RightMirror => {
-                const next_direction: LightDirection = switch (self.direction) {
-                    .Up => .Left,
-                    .Down => .Right,
-                    .Left => .Up,
-                    .Right => .Down,
-                };
-
-                var add_next_ray: bool = true;
-                if (cache.get(next_coord)) |dir| {
-                    if (dir == next_direction) {
-                        add_next_ray = false;
-                    }
-                }
-
-                if (add_next_ray) {
-                    const next_ray = LightRay.new(next_direction, next_coord.x, next_coord.y);
-                    try light_ray_list.append(next_ray);
-                }
-            },
-            .VerticalSplitter => {
-                if (self.direction == .Up or self.direction == .Down) {
-                    var add_next_ray: bool = true;
-                    if (cache.get(next_coord)) |dir| {
-                        if (dir == self.direction) {
-                            add_next_ray = false;
-                        }
-                    }
-
-                    if (add_next_ray) {
-                        const next_ray = LightRay.new(self.direction, next_coord.x, next_coord.y);
-                        try light_ray_list.append(next_ray);
-                    }
-                } else {
-                    var add_next_ray = true;
-                    if (cache.get(next_coord)) |dir| {
-                        if (dir == .Up) {
-                            add_next_ray = false;
-                        }
-                    }
-
-                    if (add_next_ray) {
-                        const next_ray_1 = LightRay.new(.Up, next_coord.x, next_coord.y);
-                        try light_ray_list.append(next_ray_1);
-                    }
-
-                    add_next_ray = true;
-                    if (cache.get(next_coord)) |dir| {
-                        if (dir == .Down) {
-                            add_next_ray = false;
-                        }
-                    }
-
-                    if (add_next_ray) {
-                        const next_ray_2 = LightRay.new(.Down, next_coord.x, next_coord.y);
-                        try light_ray_list.append(next_ray_2);
-                    }
-                }
-            },
-            .HorizontalSplitter => {
-                if (self.direction == .Left or self.direction == .Right) {
-                    var add_next_ray: bool = true;
-                    if (cache.get(next_coord)) |dir| {
-                        if (dir == self.direction) {
-                            add_next_ray = false;
-                        }
-                    }
-
-                    if (add_next_ray) {
-                        const next_ray = LightRay.new(self.direction, next_coord.x, next_coord.y);
-                        try light_ray_list.append(next_ray);
-                    }
-                } else {
-                    var add_next_ray = true;
-                    if (cache.get(next_coord)) |dir| {
-                        if (dir == .Left) {
-                            add_next_ray = false;
-                        }
-                    }
-
-                    const next_ray_1 = LightRay.new(.Left, next_coord.x, next_coord.y);
-                    try light_ray_list.append(next_ray_1);
-
-                    add_next_ray = true;
-                    if (cache.get(next_coord)) |dir| {
-                        if (dir == .Right) {
-                            add_next_ray = false;
-                        }
-                    }
-
-                    const next_ray_2 = LightRay.new(.Right, next_coord.x, next_coord.y);
-                    try light_ray_list.append(next_ray_2);
-                }
-            },
+            try light_ray_list.append(LightRay.new(dir, final_x, final_y));
         }
 
         return try light_ray_list.toOwnedSlice();
@@ -198,9 +79,14 @@ pub const LightRay = struct {
 
 pub const Contraption = struct {
     area: [][]Tile,
-    lit_areas: std.AutoArrayHashMap(Coordinate, LightDirection),
+    lit_areas: std.AutoArrayHashMap(CacheKey, bool),
     rays: []LightRay,
     allocator: std.mem.Allocator,
+
+    const CacheKey = struct {
+        coord: Coordinate,
+        direction: LightDirection,
+    };
 
     pub fn deinit(self: *Contraption) void {
         for (self.area) |line| {
@@ -211,7 +97,7 @@ pub const Contraption = struct {
         self.lit_areas.deinit();
     }
 
-    pub fn parse(allocator: std.mem.Allocator, data: []const u8) !Contraption {
+    fn parseArea(allocator: std.mem.Allocator, data: []const u8) ![][]Tile {
         var lines_list = std.ArrayList([]Tile).init(allocator);
         defer lines_list.deinit();
 
@@ -234,26 +120,130 @@ pub const Contraption = struct {
             }
         }
 
-        const area = try lines_list.toOwnedSlice();
+        return try lines_list.toOwnedSlice();
+    }
+
+    pub fn parse(allocator: std.mem.Allocator, data: []const u8) !Contraption {
+        const area = try parseArea(allocator, data);
 
         const starting_tile = area[0][0];
-        const starting_light_ray = LightRay.new(determineStartingDirection(starting_tile), 0, 0);
-        var rays = try std.ArrayList(LightRay).initCapacity(allocator, 1);
-        try rays.append(starting_light_ray);
+
+        const directions = try determineNextDirection(allocator, starting_tile, .Right);
+        defer allocator.free(directions);
+
+        var rays = try std.ArrayList(LightRay).initCapacity(allocator, 2);
         defer rays.deinit();
 
-        const lit_areas = std.AutoArrayHashMap(Coordinate, LightDirection).init(allocator);
+        for (directions) |dir| {
+            try rays.append(LightRay.new(dir, 0, 0));
+        }
+
+        const lit_areas = std.AutoArrayHashMap(CacheKey, bool).init(allocator);
 
         return Contraption{ .area = area, .rays = try rays.toOwnedSlice(), .lit_areas = lit_areas, .allocator = allocator };
     }
 
-    fn determineStartingDirection(starting_tile: Tile) LightDirection {
-        return switch (starting_tile) {
-            .VerticalSplitter => .Down,
-            .RightMirror => .Down,
-            .LeftMirror => .Up,
-            else => .Right,
-        };
+    // pub fn parseToPermutations(allocator: std.mem.Allocator, data: []const u8) ![]Contraption {
+    //     var contraptions = std.ArrayList(Contraption).init(allocator);
+    //     defer contraptions.deinit();
+
+    //     const area = try parseArea(allocator, data);
+
+    //     for (area, 0..) |line, i| {
+    //         for (line, 0..) |tile, j| {
+    //             if (i == 0 and j == 0) {
+    //                 //
+    //             } else if (i == 0 and j == line.len - 1) {
+    //                 //
+    //             } else if (i == area.len - 1 and j == 0) {
+    //                 //
+    //             } else if (i == area.len - 1 and j == line.len - 1) {
+    //                 //
+    //             } else {
+    //                 //
+    //             }
+    //         }
+    //     }
+
+    //     return try contraptions.toOwnedSlice();
+    // }
+
+    fn determineNextDirection(allocator: std.mem.Allocator, tile: Tile, direction: LightDirection) ![]LightDirection {
+        var directions = try std.ArrayList(LightDirection).initCapacity(allocator, 2);
+        defer directions.deinit();
+
+        switch (direction) {
+            .Right => {
+                switch (tile) {
+                    .VerticalSplitter => {
+                        try directions.append(.Up);
+                        try directions.append(.Down);
+                    },
+                    .RightMirror => {
+                        try directions.append(.Down);
+                    },
+                    .LeftMirror => {
+                        try directions.append(.Up);
+                    },
+                    else => {
+                        try directions.append(.Right);
+                    },
+                }
+            },
+            .Left => {
+                switch (tile) {
+                    .VerticalSplitter => {
+                        try directions.append(.Up);
+                        try directions.append(.Down);
+                    },
+                    .RightMirror => {
+                        try directions.append(.Up);
+                    },
+                    .LeftMirror => {
+                        try directions.append(.Down);
+                    },
+                    else => {
+                        try directions.append(.Left);
+                    },
+                }
+            },
+            .Up => {
+                switch (tile) {
+                    .HorizontalSplitter => {
+                        try directions.append(.Left);
+                        try directions.append(.Right);
+                    },
+                    .RightMirror => {
+                        try directions.append(.Left);
+                    },
+                    .LeftMirror => {
+                        try directions.append(.Right);
+                    },
+                    else => {
+                        try directions.append(.Up);
+                    },
+                }
+            },
+            .Down => {
+                switch (tile) {
+                    .HorizontalSplitter => {
+                        try directions.append(.Left);
+                        try directions.append(.Right);
+                    },
+                    .RightMirror => {
+                        try directions.append(.Right);
+                    },
+                    .LeftMirror => {
+                        try directions.append(.Left);
+                    },
+                    else => {
+                        try directions.append(.Down);
+                    },
+                }
+            },
+        }
+
+        return try directions.toOwnedSlice();
     }
 
     pub fn run(self: *Contraption) !void {
@@ -265,13 +255,12 @@ pub const Contraption = struct {
         defer new_rays.deinit();
 
         for (self.rays) |ray| {
-            if (self.lit_areas.get(ray.coord)) |dir| {
-                if (dir == ray.direction) {
-                    continue;
-                }
+            const cache_key = CacheKey{ .coord = ray.coord, .direction = ray.direction };
+            if (self.lit_areas.get(cache_key)) |_| {
+                continue;
             }
 
-            try self.lit_areas.put(ray.coord, ray.direction);
+            try self.lit_areas.put(cache_key, true);
             const addl_rays = try ray.advance(self.allocator, self.area, &self.lit_areas);
             try new_rays.appendSlice(addl_rays);
         }
@@ -284,7 +273,14 @@ pub const Contraption = struct {
         return self.rays.len > 0;
     }
 
-    pub fn count_lit_areas(self: Contraption) usize {
-        return self.lit_areas.keys().len;
+    pub fn count_lit_areas(self: Contraption) !usize {
+        var map = std.AutoArrayHashMap(Coordinate, bool).init(self.allocator);
+        defer map.deinit();
+
+        for (self.lit_areas.keys()) |key| {
+            try map.put(key.coord, true);
+        }
+
+        return map.keys().len;
     }
 };

@@ -20,5 +20,6 @@ pub fn main() !void {
     defer contraption.deinit();
 
     try contraption.run();
-    std.debug.print("Lit areas: {}\n", .{contraption.count_lit_areas()});
+    const lit_area_count = try contraption.count_lit_areas();
+    std.debug.print("Lit areas: {}\n", .{lit_area_count});
 }
