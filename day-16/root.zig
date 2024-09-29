@@ -50,12 +50,15 @@ pub const LightRay = struct {
             delta_x = -1;
         }
 
-        const final_y: i16 = @as(i16, self.coord.y) + delta_y;
-        const final_x: i16 = @as(i16, self.coord.x) + delta_x;
+        const deltafied_y: isize = @as(isize, @intCast(self.coord.y)) + delta_y;
+        const deltafied_x: isize = @as(isize, @intCast(self.coord.x)) + delta_x;
 
-        if (final_y < 0 or final_y > area.len - 1 or final_x < 0 or final_x > area[0].len - 1) {
+        if (deltafied_y < 0 or deltafied_y > area.len - 1 or deltafied_x < 0 or deltafied_x > area[0].len - 1) {
             return try light_ray_list.toOwnedSlice();
         }
+
+        const final_y = @as(usize, @intCast(deltafied_y));
+        const final_x = @as(usize, @intCast(deltafied_x));
 
         const next_tile = area[final_y][final_x];
         const next_coord = Coordinate{ .x = @as(usize, @intCast(final_x)), .y = @as(usize, @intCast(final_y)) };
@@ -65,7 +68,7 @@ pub const LightRay = struct {
                 try light_ray_list.append(next_ray);
             },
             .LeftMirror => {
-                const next_direction = switch (self.direction) {
+                const next_direction: LightDirection = switch (self.direction) {
                     .Up => .Right,
                     .Down => .Left,
                     .Left => .Up,
@@ -76,7 +79,7 @@ pub const LightRay = struct {
                 try light_ray_list.append(next_ray);
             },
             .RightMirror => {
-                const next_direction = switch (self.direction) {
+                const next_direction: LightDirection = switch (self.direction) {
                     .Up => .Left,
                     .Down => .Right,
                     .Left => .Down,
@@ -122,7 +125,7 @@ pub const Contraption = struct {
     rays: []LightRay,
     allocator: std.mem.Allocator,
 
-    pub fn deinit(self: Contraption) void {
+    pub fn deinit(self: *Contraption) void {
         for (self.area) |line| {
             self.allocator.free(line);
         }
@@ -157,15 +160,17 @@ pub const Contraption = struct {
         const area = try lines_list.toOwnedSlice();
 
         const starting_light_ray = LightRay.new(LightDirection.Right, 0, 0);
-        var rays = .{starting_light_ray};
+        var rays = try std.ArrayList(LightRay).initCapacity(allocator, 1);
+        try rays.append(starting_light_ray);
+        defer rays.deinit();
 
         const lit_areas = std.AutoArrayHashMap(Coordinate, bool).init(allocator);
 
-        return Contraption{ .area = area, .rays = rays[0..], .lit_areas = lit_areas, .allocator = allocator };
+        return Contraption{ .area = area, .rays = try rays.toOwnedSlice(), .lit_areas = lit_areas, .allocator = allocator };
     }
 
     pub fn run(self: *Contraption) !void {
-        while (self.tick()) {}
+        while (try self.tick()) {}
     }
 
     fn tick(self: *Contraption) !bool {
@@ -183,9 +188,7 @@ pub const Contraption = struct {
         self.allocator.free(self.rays);
         self.rays = rays;
 
-        if (self.rays.len == 0) {
-            return false;
-        }
+        return self.rays.len > 0;
     }
 
     pub fn count_lit_areas(self: Contraption) usize {
