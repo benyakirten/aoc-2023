@@ -63,6 +63,7 @@ pub const LightRay = struct {
         const next_tile = area[final_y][final_x];
         const next_coord = Coordinate{ .x = @as(usize, @intCast(final_x)), .y = @as(usize, @intCast(final_y)) };
         const directions = try Contraption.determineNextDirection(allocator, next_tile, self.direction);
+        defer allocator.free(directions);
 
         for (directions) |dir| {
             const cache_key = Contraption.CacheKey{ .coord = next_coord, .direction = dir };
@@ -236,7 +237,9 @@ pub const Contraption = struct {
             }
 
             try self.lit_areas.put(cache_key, true);
+
             const addl_rays = try ray.advance(self.allocator, self.area, &self.lit_areas);
+            defer self.allocator.free(addl_rays);
             try new_rays.appendSlice(addl_rays);
         }
 
@@ -261,14 +264,29 @@ pub const Contraption = struct {
 };
 
 pub const Contraptions = struct {
-    area: [][]Tile,
     // If we have already resolved a certain path then we cache the result
     // Maybe whenever a light ray encounters something that changes its path
     // It's added to the cache.
-    // NOTE: Without caching, this ran in 5.5s
+    // NOTE: Without caching, this ran in 5.5s so I'm just going to move onto the next problem.
     cache: std.AutoArrayHashMap(Contraption.CacheKey, CacheValue),
     contraptions: []Contraption,
     allocator: std.mem.Allocator,
+
+    pub fn deinit(self: *Contraptions) void {
+        self.cache.deinit();
+        const area = self.contraptions[0].area;
+        for (self.contraptions) |*contraption| {
+            self.allocator.free(contraption.rays);
+            contraption.lit_areas.deinit();
+        }
+
+        for (area) |line| {
+            self.allocator.free(line);
+        }
+        self.allocator.free(area);
+
+        self.allocator.free(self.contraptions);
+    }
 
     const CacheValue = struct {
         final_coord: Coordinate,
@@ -405,7 +423,6 @@ pub const Contraptions = struct {
 
         const contraptions = try contraption_list.toOwnedSlice();
         return Contraptions{
-            .area = area,
             .cache = std.AutoArrayHashMap(Contraption.CacheKey, CacheValue).init(allocator),
             .contraptions = contraptions,
             .allocator = allocator,
@@ -419,6 +436,8 @@ pub const Contraptions = struct {
         defer rays.deinit();
 
         const directions = try Contraption.determineNextDirection(allocator, starting_tile, direction);
+        defer allocator.free(directions);
+
         for (directions) |dir| {
             try rays.append(LightRay.new(dir, starting_coordinate.x, starting_coordinate.y));
         }
