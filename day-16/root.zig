@@ -159,7 +159,8 @@ pub const Contraption = struct {
 
         const area = try lines_list.toOwnedSlice();
 
-        const starting_light_ray = LightRay.new(LightDirection.Right, 0, 0);
+        const starting_tile = area[0][0];
+        const starting_light_ray = LightRay.new(determineStartingDirection(starting_tile), 0, 0);
         var rays = try std.ArrayList(LightRay).initCapacity(allocator, 1);
         try rays.append(starting_light_ray);
         defer rays.deinit();
@@ -167,6 +168,15 @@ pub const Contraption = struct {
         const lit_areas = std.AutoArrayHashMap(Coordinate, LightDirection).init(allocator);
 
         return Contraption{ .area = area, .rays = try rays.toOwnedSlice(), .lit_areas = lit_areas, .allocator = allocator };
+    }
+
+    fn determineStartingDirection(starting_tile: Tile) LightDirection {
+        return switch (starting_tile) {
+            .VerticalSplitter => .Down,
+            .RightMirror => .Down,
+            .LeftMirror => .Up,
+            else => .Right,
+        };
     }
 
     pub fn run(self: *Contraption) !void {
@@ -193,6 +203,12 @@ pub const Contraption = struct {
 
         self.allocator.free(self.rays);
         self.rays = rays;
+
+        std.debug.print("REP\n", .{});
+        for (self.lit_areas.keys()) |coord| {
+            std.debug.print("{any}\n", .{self.lit_areas.get(coord).?});
+        }
+        std.debug.print("\n", .{});
 
         return self.rays.len > 0;
     }
