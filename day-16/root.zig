@@ -32,7 +32,7 @@ pub const LightRay = struct {
         return LightRay{ .direction = direction, .coord = coord };
     }
 
-    fn advance(self: LightRay, allocator: std.mem.Allocator, area: [][]Tile) ![]LightRay {
+    fn advance(self: LightRay, allocator: std.mem.Allocator, area: [][]Tile, cache: *std.AutoArrayHashMap(Coordinate, LightDirection)) ![]LightRay {
         var light_ray_list = try std.ArrayList(LightRay).initCapacity(allocator, 2);
         defer light_ray_list.deinit();
 
@@ -64,8 +64,17 @@ pub const LightRay = struct {
         const next_coord = Coordinate{ .x = @as(usize, @intCast(final_x)), .y = @as(usize, @intCast(final_y)) };
         switch (next_tile) {
             .Empty => {
-                const next_ray = LightRay.new(self.direction, next_coord.x, next_coord.y);
-                try light_ray_list.append(next_ray);
+                var add_next_ray: bool = true;
+                if (cache.get(next_coord)) |dir| {
+                    if (dir == self.direction) {
+                        add_next_ray = false;
+                    }
+                }
+
+                if (add_next_ray) {
+                    const next_ray = LightRay.new(self.direction, next_coord.x, next_coord.y);
+                    try light_ray_list.append(next_ray);
+                }
             },
             .LeftMirror => {
                 const next_direction: LightDirection = switch (self.direction) {
@@ -75,8 +84,17 @@ pub const LightRay = struct {
                     .Right => .Up,
                 };
 
-                const next_ray = LightRay.new(next_direction, next_coord.x, next_coord.y);
-                try light_ray_list.append(next_ray);
+                var add_next_ray: bool = true;
+                if (cache.get(next_coord)) |dir| {
+                    if (dir == next_direction) {
+                        add_next_ray = false;
+                    }
+                }
+
+                if (add_next_ray) {
+                    const next_ray = LightRay.new(next_direction, next_coord.x, next_coord.y);
+                    try light_ray_list.append(next_ray);
+                }
             },
             .RightMirror => {
                 const next_direction: LightDirection = switch (self.direction) {
@@ -86,31 +104,90 @@ pub const LightRay = struct {
                     .Right => .Down,
                 };
 
-                const next_ray = LightRay.new(next_direction, next_coord.x, next_coord.y);
-                try light_ray_list.append(next_ray);
+                var add_next_ray: bool = true;
+                if (cache.get(next_coord)) |dir| {
+                    if (dir == next_direction) {
+                        add_next_ray = false;
+                    }
+                }
+
+                if (add_next_ray) {
+                    const next_ray = LightRay.new(next_direction, next_coord.x, next_coord.y);
+                    try light_ray_list.append(next_ray);
+                }
             },
             .VerticalSplitter => {
                 if (self.direction == .Up or self.direction == .Down) {
-                    const next_ray = LightRay.new(self.direction, next_coord.x, next_coord.y);
-                    try light_ray_list.append(next_ray);
-                } else {
-                    const next_ray1 = LightRay.new(.Up, next_coord.x, next_coord.y);
-                    try light_ray_list.append(next_ray1);
+                    var add_next_ray: bool = true;
+                    if (cache.get(next_coord)) |dir| {
+                        if (dir == self.direction) {
+                            add_next_ray = false;
+                        }
+                    }
 
-                    const next_ray2 = LightRay.new(.Down, next_coord.x, next_coord.y);
-                    try light_ray_list.append(next_ray2);
+                    if (add_next_ray) {
+                        const next_ray = LightRay.new(self.direction, next_coord.x, next_coord.y);
+                        try light_ray_list.append(next_ray);
+                    }
+                } else {
+                    var add_next_ray = true;
+                    if (cache.get(next_coord)) |dir| {
+                        if (dir == .Up) {
+                            add_next_ray = false;
+                        }
+                    }
+
+                    if (add_next_ray) {
+                        const next_ray_1 = LightRay.new(.Up, next_coord.x, next_coord.y);
+                        try light_ray_list.append(next_ray_1);
+                    }
+
+                    add_next_ray = true;
+                    if (cache.get(next_coord)) |dir| {
+                        if (dir == .Down) {
+                            add_next_ray = false;
+                        }
+                    }
+
+                    if (add_next_ray) {
+                        const next_ray_2 = LightRay.new(.Down, next_coord.x, next_coord.y);
+                        try light_ray_list.append(next_ray_2);
+                    }
                 }
             },
             .HorizontalSplitter => {
                 if (self.direction == .Left or self.direction == .Right) {
-                    const next_ray = LightRay.new(self.direction, next_coord.x, next_coord.y);
-                    try light_ray_list.append(next_ray);
-                } else {
-                    const next_ray1 = LightRay.new(.Left, next_coord.x, next_coord.y);
-                    try light_ray_list.append(next_ray1);
+                    var add_next_ray: bool = true;
+                    if (cache.get(next_coord)) |dir| {
+                        if (dir == self.direction) {
+                            add_next_ray = false;
+                        }
+                    }
 
-                    const next_ray2 = LightRay.new(.Right, next_coord.x, next_coord.y);
-                    try light_ray_list.append(next_ray2);
+                    if (add_next_ray) {
+                        const next_ray = LightRay.new(self.direction, next_coord.x, next_coord.y);
+                        try light_ray_list.append(next_ray);
+                    }
+                } else {
+                    var add_next_ray = true;
+                    if (cache.get(next_coord)) |dir| {
+                        if (dir == .Left) {
+                            add_next_ray = false;
+                        }
+                    }
+
+                    const next_ray_1 = LightRay.new(.Left, next_coord.x, next_coord.y);
+                    try light_ray_list.append(next_ray_1);
+
+                    add_next_ray = true;
+                    if (cache.get(next_coord)) |dir| {
+                        if (dir == .Right) {
+                            add_next_ray = false;
+                        }
+                    }
+
+                    const next_ray_2 = LightRay.new(.Right, next_coord.x, next_coord.y);
+                    try light_ray_list.append(next_ray_2);
                 }
             },
         }
@@ -195,7 +272,7 @@ pub const Contraption = struct {
             }
 
             try self.lit_areas.put(ray.coord, ray.direction);
-            const addl_rays = try ray.advance(self.allocator, self.area);
+            const addl_rays = try ray.advance(self.allocator, self.area, &self.lit_areas);
             try new_rays.appendSlice(addl_rays);
         }
 
@@ -203,12 +280,6 @@ pub const Contraption = struct {
 
         self.allocator.free(self.rays);
         self.rays = rays;
-
-        std.debug.print("REP\n", .{});
-        for (self.lit_areas.keys()) |coord| {
-            std.debug.print("{any}\n", .{self.lit_areas.get(coord).?});
-        }
-        std.debug.print("\n", .{});
 
         return self.rays.len > 0;
     }
