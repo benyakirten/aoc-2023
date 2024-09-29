@@ -284,28 +284,121 @@ pub const Contraptions = struct {
         for (area, 0..) |line, i| {
             if (i == 0) {
                 // Top row - everything goes down, corners go down and towards center
-                for (line, 0..) |tile, j| {
+                for (0..line.len) |j| {
+                    const coord = Coordinate{ .x = j, .y = i };
                     if (j == 0) {
                         // Top left corner - go down and right
+                        const right_contraption = try createContraption(
+                            allocator,
+                            area,
+                            coord,
+                            .Right,
+                        );
+                        try contraption_list.append(right_contraption);
+
+                        const down_contraption = try createContraption(
+                            allocator,
+                            area,
+                            coord,
+                            .Down,
+                        );
+                        try contraption_list.append(down_contraption);
                     } else if (j == line.len - 1) {
                         // Top right corner - go down and left
+                        const left_contraption = try createContraption(
+                            allocator,
+                            area,
+                            coord,
+                            .Left,
+                        );
+                        try contraption_list.append(left_contraption);
+
+                        const down_contraption = try createContraption(
+                            allocator,
+                            area,
+                            coord,
+                            .Down,
+                        );
+                        try contraption_list.append(down_contraption);
                     } else {
                         // All other tiles go down
+                        const contraption = try createContraption(
+                            allocator,
+                            area,
+                            coord,
+                            .Down,
+                        );
+                        try contraption_list.append(contraption);
                     }
                 }
             } else if (i == area.len - 1) {
                 // Bottom row - everything goes up, corners go up and towards center
-                for (line, 0..) |tile, j| {
+                for (0..line.len) |j| {
+                    const coord = Coordinate{ .x = j, .y = i };
                     if (j == 0) {
-                        // Top left corner - go up and right
+                        // Botto left corner - go up and right
+                        const right_contraption = try createContraption(
+                            allocator,
+                            area,
+                            coord,
+                            .Right,
+                        );
+                        try contraption_list.append(right_contraption);
+
+                        const up_contraption = try createContraption(
+                            allocator,
+                            area,
+                            coord,
+                            .Up,
+                        );
+                        try contraption_list.append(up_contraption);
                     } else if (j == line.len - 1) {
-                        // Top right corner - go up and left
+                        // Bottom right corner - go up and left
+                        const left_contraption = try createContraption(
+                            allocator,
+                            area,
+                            coord,
+                            .Left,
+                        );
+                        try contraption_list.append(left_contraption);
+
+                        const up_contraption = try createContraption(
+                            allocator,
+                            area,
+                            coord,
+                            .Up,
+                        );
+                        try contraption_list.append(up_contraption);
                     } else {
                         // All other tiles go up
+                        const contraption = try createContraption(
+                            allocator,
+                            area,
+                            coord,
+                            .Up,
+                        );
+                        try contraption_list.append(contraption);
                     }
                 }
             } else {
-                // First and last tile
+                // First and last tile of the row - first tile goes right, last tile goes left
+                const left_coord = Coordinate{ .x = 0, .y = i };
+                const left_contraption = try createContraption(
+                    allocator,
+                    area,
+                    left_coord,
+                    .Right,
+                );
+                try contraption_list.append(left_contraption);
+
+                const right_coord = Coordinate{ .x = line.len - 1, .y = i };
+                const right_contraption = try createContraption(
+                    allocator,
+                    area,
+                    right_coord,
+                    .Left,
+                );
+                try contraption_list.append(right_contraption);
             }
         }
 
@@ -316,5 +409,21 @@ pub const Contraptions = struct {
             .contraptions = contraptions,
             .allocator = allocator,
         };
+    }
+
+    fn createContraption(allocator: std.mem.Allocator, area: [][]Tile, starting_coordinate: Coordinate, direction: LightDirection) !Contraption {
+        const starting_tile = area[starting_coordinate.y][starting_coordinate.x];
+
+        var rays = try std.ArrayList(LightRay).initCapacity(allocator, 2);
+        defer rays.deinit();
+
+        const directions = try Contraption.determineNextDirection(allocator, starting_tile, direction);
+        for (directions) |dir| {
+            try rays.append(LightRay.new(dir, starting_coordinate.x, starting_coordinate.y));
+        }
+
+        const lit_areas = std.AutoArrayHashMap(Contraption.CacheKey, bool).init(allocator);
+
+        return Contraption{ .area = area, .rays = try rays.toOwnedSlice(), .lit_areas = lit_areas, .allocator = allocator };
     }
 };
