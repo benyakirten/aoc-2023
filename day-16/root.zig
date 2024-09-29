@@ -143,31 +143,6 @@ pub const Contraption = struct {
         return Contraption{ .area = area, .rays = try rays.toOwnedSlice(), .lit_areas = lit_areas, .allocator = allocator };
     }
 
-    // pub fn parseToPermutations(allocator: std.mem.Allocator, data: []const u8) ![]Contraption {
-    //     var contraptions = std.ArrayList(Contraption).init(allocator);
-    //     defer contraptions.deinit();
-
-    //     const area = try parseArea(allocator, data);
-
-    //     for (area, 0..) |line, i| {
-    //         for (line, 0..) |tile, j| {
-    //             if (i == 0 and j == 0) {
-    //                 //
-    //             } else if (i == 0 and j == line.len - 1) {
-    //                 //
-    //             } else if (i == area.len - 1 and j == 0) {
-    //                 //
-    //             } else if (i == area.len - 1 and j == line.len - 1) {
-    //                 //
-    //             } else {
-    //                 //
-    //             }
-    //         }
-    //     }
-
-    //     return try contraptions.toOwnedSlice();
-    // }
-
     fn determineNextDirection(allocator: std.mem.Allocator, tile: Tile, direction: LightDirection) ![]LightDirection {
         var directions = try std.ArrayList(LightDirection).initCapacity(allocator, 2);
         defer directions.deinit();
@@ -282,5 +257,64 @@ pub const Contraption = struct {
         }
 
         return map.keys().len;
+    }
+};
+
+pub const Contraptions = struct {
+    area: [][]Tile,
+    // If we have already resolved a certain path then we cache the result
+    // Maybe whenever a light ray encounters something that changes its path
+    // It's added to the cache
+    cache: std.AutoArrayHashMap(Contraption.CacheKey, CacheValue),
+    contraptions: []Contraption,
+    allocator: std.mem.Allocator,
+
+    const CacheValue = struct {
+        final_coord: Coordinate,
+        final_direction: LightDirection,
+        lit_areas: []Contraption.CacheKey,
+    };
+
+    pub fn parseToPermutations(allocator: std.mem.Allocator, data: []const u8) ![]Contraption {
+        var contraption_list = std.ArrayList(Contraption).init(allocator);
+        defer contraption_list.deinit();
+
+        const area = try Contraption.parseArea(allocator, data);
+
+        for (area, 0..) |line, i| {
+            if (i == 0) {
+                // Top row - everything goes down, corners go down and towards center
+                for (line, 0..) |tile, j| {
+                    if (j == 0) {
+                        // Top left corner - go down and right
+                    } else if (j == line.len - 1) {
+                        // Top right corner - go down and left
+                    } else {
+                        // All other tiles go down
+                    }
+                }
+            } else if (i == area.len - 1) {
+                // Bottom row - everything goes up, corners go up and towards center
+                for (line, 0..) |tile, j| {
+                    if (j == 0) {
+                        // Top left corner - go up and right
+                    } else if (j == line.len - 1) {
+                        // Top right corner - go up and left
+                    } else {
+                        // All other tiles go up
+                    }
+                }
+            } else {
+                // First and last tile
+            }
+        }
+
+        const contraptions = try contraption_list.toOwnedSlice();
+        return Contraptions{
+            .area = area,
+            .cache = std.AutoArrayHashMap(Contraption.CacheKey, CacheValue).init(allocator),
+            .contraptions = contraptions,
+            .allocator = allocator,
+        };
     }
 };
