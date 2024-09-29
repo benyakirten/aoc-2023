@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const Contraption = @import("root.zig").Contraption;
-
 const Contraptions = @import("root.zig").Contraptions;
 
 const MAX_BUFFER_SIZE = 1_000_000;
